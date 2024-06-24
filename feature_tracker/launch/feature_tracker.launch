@@ -1,0 +1,7 @@
+<launch>
+    <node pkg="feature_tracker" type="feature_tracker_node" name="feature_tracker" output="screen">
+        <param name="img_topic" value="/cam0/image_raw"/>
+        <param name="config_file" value="$(find feature_tracker)/config/camera.yaml"/>
+        <param name="freq" value = "10.0"/>
+    </node>
+</launch>
