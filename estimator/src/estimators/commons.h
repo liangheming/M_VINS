@@ -1,6 +1,8 @@
 #pragma once
-#include <Eigen/Eigen>
 #include <map>
+#include <memory>
+#include <iostream>
+#include <Eigen/Eigen>
 #include <sophus/so3.hpp>
 const int WINDOW_SIZE = 20;
 

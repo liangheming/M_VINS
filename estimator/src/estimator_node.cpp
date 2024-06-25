@@ -36,6 +36,7 @@ public:
         ROS_INFO("EstimatorNode Start!");
         loadParams();
         initSubscribers();
+        m_estimator = std::make_shared<SlideWindowEstimator>(m_sw_config);
         m_timer = m_nh.createTimer(ros::Duration(0.02), &EstimatorNode::mainCallback, this);
     }
 
@@ -158,11 +159,11 @@ public:
             double x = feature->points[i].x;
             double y = feature->points[i].y;
             double z = feature->points[i].z;
-            int id = feature->channels[i].values[0];
-            double u = feature->channels[i].values[1];
-            double v = feature->channels[i].values[2];
-            double vx = feature->channels[i].values[3];
-            double vy = feature->channels[i].values[4];
+            int id = feature->channels[0].values[i];
+            double u = feature->channels[1].values[i];
+            double v = feature->channels[2].values[i];
+            double vx = feature->channels[3].values[i];
+            double vy = feature->channels[4].values[i];
             Vec7d val;
             val << x, y, z, u, v, vx, vy;
             feats[id] = val;
@@ -174,6 +175,7 @@ private:
     ros::NodeHandle m_nh;
     NodeConfig m_node_config;
     NodeState m_node_state;
+    SWConfig m_sw_config;
     ros::Subscriber m_feature_sub;
     ros::Subscriber m_imu_sub;
     ros::Timer m_timer;

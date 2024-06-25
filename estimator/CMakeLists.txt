@@ -15,7 +15,9 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   tf
 )
-find_package(Sophus REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(yaml-cpp REQUIRED)
+find_package(OpenCV REQUIRED)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -36,13 +38,15 @@ catkin_package(
 include_directories(
 # include
   ${catkin_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIR}
 )
 
 set(SRC_LIST src/estimators/commons.cpp
              src/estimators/sw_estimator.cpp
-             src/estimators/integration.cpp)
+             src/estimators/integration.cpp
+             src/estimators/initial_alignment.cpp)
 
-add_executable(${PROJECT_NAME}_node src/estimator_node.cpp)
+add_executable(${PROJECT_NAME}_node src/estimator_node.cpp ${SRC_LIST})
 
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
