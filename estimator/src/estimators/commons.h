@@ -4,8 +4,11 @@
 #include <iostream>
 #include <Eigen/Eigen>
 #include <sophus/so3.hpp>
+#include <opencv2/opencv.hpp>
+
 const int WINDOW_SIZE = 20;
 
+using Vec2d = Eigen::Vector2d;
 using Vec3d = Eigen::Vector3d;
 using Mat3d = Eigen::Matrix3d;
 using Vec4d = Eigen::Vector4d;
@@ -16,4 +19,6 @@ using Mat15d = Eigen::Matrix<double, 15, 15>;
 using Mat18d = Eigen::Matrix<double, 18, 18>;
 using Mat15x18d = Eigen::Matrix<double, 15, 18>;
 
-Mat3d Jr(const Vec3d& val);
+Mat3d Jr(const Vec3d &val);
+
+bool solveRelativeRT(const std::vector<std::pair<Vec3d, Vec3d>> &corres, Mat3d &rotation, Vec3d &translation);

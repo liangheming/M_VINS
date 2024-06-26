@@ -2,6 +2,8 @@
 #include "commons.h"
 #include "integration.h"
 #include "initial_alignment.h"
+#include "feature_manager.h"
+#include "initial_sfm.h"
 
 enum SWMarginFlag
 {
@@ -38,6 +40,8 @@ public:
 
     void processFeature(const Feats &feats, double timestamp);
 
+    bool relativePose(Mat3d &relative_r, Vec3d &relative_t, int &l);
+
     bool initialStructure();
 
     void solveOdometry();
@@ -48,6 +52,7 @@ public:
     SolveFlag solve_flag;
 
     Vec3d g;
+    double time_delay;
     Vec3d ps[WINDOW_SIZE + 1];
     Vec3d vs[WINDOW_SIZE + 1];
     Mat3d rs[WINDOW_SIZE + 1];
@@ -70,6 +75,7 @@ public:
     std::vector<Vec3d> linear_acceleration_buf[WINDOW_SIZE + 1];
     std::vector<Vec3d> angular_velocity_buf[WINDOW_SIZE + 1];
     std::map<double, ImageFrame> all_image_frame;
+    FeatureManager feature_manager;
 
 private:
     SWConfig m_config;

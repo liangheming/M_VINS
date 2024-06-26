@@ -1,6 +1,6 @@
 #include "sw_estimator.h"
 
-SlideWindowEstimator::SlideWindowEstimator(const SWConfig &config) : m_config(config)
+SlideWindowEstimator::SlideWindowEstimator(const SWConfig &config) : m_config(config), feature_manager(rs)
 {
     g = Vec3d(0.0, 0.0, -9.81007);
     clearState();
@@ -20,6 +20,7 @@ void SlideWindowEstimator::clearState()
         linear_acceleration_buf[i].clear();
         angular_velocity_buf[i].clear();
     }
+    time_delay = 0.0;
     integrations.clear();
     integrations.resize(WINDOW_SIZE + 1, nullptr);
     temp_integration = nullptr;
@@ -74,7 +75,12 @@ void SlideWindowEstimator::processImu(const double &dt, const Vec3d &acc, const 
     m_state.gyro_0 = gyro;
 }
 void SlideWindowEstimator::processFeature(const Feats &feats, double timestamp)
-{    // 关键帧判断
+{ // 关键帧判断
+    if (feature_manager.addFeatureCheckParallax(m_state.frame_count, feats, time_delay))
+        marginalization_flag = MARGIN_OLD;
+    else
+        marginalization_flag = MARGIN_SECOND_NEW;
+
     timestamps[m_state.frame_count] = timestamp;
     ImageFrame image_frame(feats, timestamp);
     image_frame.integration = temp_integration;
@@ -126,9 +132,62 @@ void SlideWindowEstimator::processFeature(const Feats &feats, double timestamp)
         last_p0 = ps[0];
     }
 }
+bool SlideWindowEstimator::relativePose(Mat3d &relative_r, Vec3d &relative_t, int &l)
+{
+    for (int i = 0; i < WINDOW_SIZE; i++)
+    {
+        std::vector<std::pair<Vec3d, Vec3d>> corres;
+        feature_manager.getCorresponding(i, WINDOW_SIZE, corres);
+        if (corres.size() <= 20)
+            continue;
+        double sum_parallax = 0;
 
+        for (int j = 0; j < int(corres.size()); j++)
+        {
+            Vec2d pts_0(corres[j].first(0), corres[j].first(1));
+            Vec2d pts_1(corres[j].second(0), corres[j].second(1));
+            double parallax = (pts_0 - pts_1).norm();
+            sum_parallax += parallax;
+        }
+        double average_parallax = 1.0 * sum_parallax / double(corres.size());
+        if (average_parallax * 460 > 30 && solveRelativeRT(corres, relative_r, relative_t))
+        {
+            {
+                l = i;
+                return true;
+            }
+        }
+    }
+    return false;
+}
 bool SlideWindowEstimator::initialStructure()
 {
+    std::vector<SFMFeature> sfm_f;
+    for (auto &it_per_id : feature_manager.features)
+    {
+        int imu_j = it_per_id.start_frame - 1;
+        SFMFeature tmp_feature;
+        tmp_feature.state = false;
+        tmp_feature.id = it_per_id.feature_id;
+        for (auto &it_per_frame : it_per_id.feature_per_frame)
+        {
+            imu_j++;
+            Vec3d pts_j = it_per_frame.point;
+            tmp_feature.observation.emplace_back(imu_j, Vec2d(pts_j.x(), pts_j.y()));
+        }
+        sfm_f.push_back(tmp_feature);
+    }
+
+    Mat3d relative_r;
+    Vec3d relative_t;
+    int l;
+
+    // 确定枢纽帧
+    if (!relativePose(relative_r, relative_t, l))
+        return false;
+    
+    
+
     return true;
 }
 

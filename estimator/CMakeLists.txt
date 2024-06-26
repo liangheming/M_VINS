@@ -44,7 +44,9 @@ include_directories(
 set(SRC_LIST src/estimators/commons.cpp
              src/estimators/sw_estimator.cpp
              src/estimators/integration.cpp
-             src/estimators/initial_alignment.cpp)
+             src/estimators/initial_alignment.cpp
+             src/estimators/feature_manager.cpp
+             src/estimators/initial_sfm.cpp)
 
 add_executable(${PROJECT_NAME}_node src/estimator_node.cpp ${SRC_LIST})
 
