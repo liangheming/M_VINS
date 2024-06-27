@@ -1,6 +1,6 @@
 #include "sw_estimator.h"
 
-SlideWindowEstimator::SlideWindowEstimator(const SWConfig &config) : m_config(config), feature_manager(rs)
+SlideWindowEstimator::SlideWindowEstimator(const SWConfig &config) : feature_manager(rs), m_config(config)
 {
     g = Vec3d(0.0, 0.0, -9.81007);
     clearState();
@@ -36,8 +36,10 @@ void SlideWindowEstimator::clearState()
     all_image_frame.clear();
     last_r = Mat3d::Identity();
     last_r0 = Mat3d::Identity();
+    r_ic = Mat3d::Identity();
     last_p = Vec3d::Zero();
     last_p0 = Vec3d::Zero();
+    t_ic = Vec3d::Zero();
 }
 void SlideWindowEstimator::processImu(const double &dt, const Vec3d &acc, const Vec3d &gyro)
 {
@@ -160,6 +162,11 @@ bool SlideWindowEstimator::relativePose(Mat3d &relative_r, Vec3d &relative_t, in
     }
     return false;
 }
+
+bool SlideWindowEstimator::visualInitialAlign()
+{
+    return true;
+}
 bool SlideWindowEstimator::initialStructure()
 {
     std::vector<SFMFeature> sfm_f;
@@ -185,10 +192,85 @@ bool SlideWindowEstimator::initialStructure()
     // 确定枢纽帧
     if (!relativePose(relative_r, relative_t, l))
         return false;
-    
-    
+    std::cout << "l: " << l << " " << relative_t.transpose() << std::endl;
+    // 纯视觉初始化
+    GlobalSFM sfm;
+    Quatd qs[m_state.frame_count + 1];
+    Vec3d ts[m_state.frame_count + 1];
+    std::map<int, Vec3d> sfm_tracked_points;
+    if (!sfm.construct(m_state.frame_count + 1, qs, ts, l, relative_r, relative_t, sfm_f, sfm_tracked_points))
+    {
+        marginalization_flag = MARGIN_OLD;
+        return false;
+    }
 
-    return true;
+    // 对所有临时帧进行pnp求解
+    std::map<double, ImageFrame>::iterator frame_it;
+    std::map<int, Vec3d>::iterator it;
+    frame_it = all_image_frame.begin();
+
+    for (int i = 0; frame_it != all_image_frame.end(); frame_it++)
+    {
+        cv::Mat r, rvec, t, D, tmp_r;
+        // 这里为视觉惯性对齐做准备
+        if ((frame_it->first) == timestamps[i])
+        {
+            frame_it->second.is_keyframe = true;
+            frame_it->second.r = qs[i].toRotationMatrix() * r_ic.transpose();
+            frame_it->second.t = ts[i];
+            i++;
+            continue;
+        }
+        if ((frame_it->first) > timestamps[i])
+        {
+            i++;
+        }
+
+        Mat3d r_inital = (qs[i].inverse()).toRotationMatrix();
+        Vec3d t_inital = -r_inital * ts[i];
+        cv::eigen2cv(r_inital, tmp_r);
+        cv::Rodrigues(tmp_r, rvec);
+        cv::eigen2cv(t_inital, t);
+
+        frame_it->second.is_keyframe = false;
+
+        std::vector<cv::Point3f> pts_3_vector;
+        std::vector<cv::Point2f> pts_2_vector;
+        for (auto &id_pts : frame_it->second.feats)
+        {
+            int feature_id = id_pts.first;
+            it = sfm_tracked_points.find(feature_id);
+            if (it != sfm_tracked_points.end())
+            {
+                Vec3d world_pts = it->second;
+                cv::Point3f pts_3(world_pts(0), world_pts(1), world_pts(2));
+                pts_3_vector.push_back(pts_3);
+                Vec2d img_pts = id_pts.second.head<2>();
+                cv::Point2f pts_2(img_pts(0), img_pts(1));
+                pts_2_vector.push_back(pts_2);
+            }
+        }
+        cv::Mat K = (cv::Mat_<double>(3, 3) << 1, 0, 0, 0, 1, 0, 0, 0, 1);
+        if (pts_3_vector.size() < 6)
+            return false;
+        if (!cv::solvePnP(pts_3_vector, pts_2_vector, K, D, rvec, t, 1))
+            return false;
+        cv::Rodrigues(rvec, r);
+        Eigen::MatrixXd r_pnp, tmp_r_pnp;
+        cv::cv2eigen(r, tmp_r_pnp);
+        r_pnp = tmp_r_pnp.transpose();
+        Eigen::MatrixXd t_pnp;
+        cv::cv2eigen(t, t_pnp);
+        t_pnp = r_pnp * (-t_pnp);
+        frame_it->second.r = r_pnp * r_ic.transpose();
+        frame_it->second.t = t_pnp;
+    }
+    
+    // 视觉惯性对齐
+    if (visualInitialAlign())
+        return true;
+    else
+        return false;
 }
 
 void SlideWindowEstimator::solveOdometry()

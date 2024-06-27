@@ -124,7 +124,10 @@ public:
             feature_points->header.frame_id = "world";
             for (size_t j = 0; j < m_tracker->ids().size(); j++)
             {
+                if (m_tracker->trackCnt()[j] <= 1)
+                    continue;
                 const int &id = m_tracker->ids()[j];
+
                 const cv::Point2f &xy = m_tracker->curPtsXY()[j];
                 const cv::Point2f &uv = m_tracker->curPtsUV()[j];
                 const cv::Point2f &velocity = m_tracker->ptsVelocity()[j];

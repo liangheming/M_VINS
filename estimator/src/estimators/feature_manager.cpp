@@ -26,8 +26,10 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const Feats &feats
 {
     int last_track_num = 0, parallax_num = 0;
     double parallax_sum = 0.0;
+    // std::cout << "feat_size:  " << feats.size() << std::endl;
     for (auto &feat : feats)
     {
+        // std::cout << frame_count << " " << feat.first << " " << feat.second.transpose() << std::endl;
         FeaturePerFrame f_per_frame(feat.second, td);
         int feature_id = feat.first;
         auto it = std::find_if(features.begin(), features.end(), [feature_id](const FeaturePerID &it)
@@ -55,7 +57,6 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const Feats &feats
             parallax_num++;
         }
     }
-
     if (parallax_num == 0)
         return true;
     else

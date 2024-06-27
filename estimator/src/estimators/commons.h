@@ -6,7 +6,7 @@
 #include <sophus/so3.hpp>
 #include <opencv2/opencv.hpp>
 
-const int WINDOW_SIZE = 20;
+const int WINDOW_SIZE = 10;
 
 using Vec2d = Eigen::Vector2d;
 using Vec3d = Eigen::Vector3d;
@@ -18,6 +18,7 @@ using Feats = std::map<int, Vec7d>;
 using Mat15d = Eigen::Matrix<double, 15, 15>;
 using Mat18d = Eigen::Matrix<double, 18, 18>;
 using Mat15x18d = Eigen::Matrix<double, 15, 18>;
+using Quatd = Eigen::Quaterniond;
 
 Mat3d Jr(const Vec3d &val);
 

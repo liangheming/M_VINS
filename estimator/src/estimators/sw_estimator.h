@@ -42,6 +42,8 @@ public:
 
     bool relativePose(Mat3d &relative_r, Vec3d &relative_t, int &l);
 
+    bool visualInitialAlign();
+
     bool initialStructure();
 
     void solveOdometry();
@@ -59,8 +61,8 @@ public:
     Vec3d bas[WINDOW_SIZE + 1];
     Vec3d bgs[WINDOW_SIZE + 1];
 
-    Mat3d last_r, last_r0;
-    Vec3d last_p, last_p0;
+    Mat3d last_r, last_r0, r_ic;
+    Vec3d last_p, last_p0, t_ic;
 
     double timestamps[WINDOW_SIZE + 1];
 

@@ -183,7 +183,7 @@ void FeatureTracker::track(const cv::Mat &img, double timestamp, bool publish)
 
     if (publish)
     {
-        
+
         rejectWithF();
         setMask();
         int n_max_cnt = m_config.max_count - static_cast<int>(m_cur_pts.size());
@@ -193,11 +193,11 @@ void FeatureTracker::track(const cv::Mat &img, double timestamp, bool publish)
             m_cache_pts.clear();
         addPoints();
     }
-
-    undistortedPoints();
     m_prev_img = m_cur_img;
-    m_prev_time = m_cur_time;
     m_prev_pts = m_cur_pts;
+    undistortedPoints();
+    m_prev_time = m_cur_time;
+
     if (publish)
         updateID();
 }

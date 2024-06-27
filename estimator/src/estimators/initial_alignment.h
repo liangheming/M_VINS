@@ -10,7 +10,7 @@ public:
 
     Feats feats;
     double timestamp;
-    Mat3d R;
+    Mat3d r;
     Vec3d t;
     std::shared_ptr<Integration> integration;
     bool is_keyframe;
