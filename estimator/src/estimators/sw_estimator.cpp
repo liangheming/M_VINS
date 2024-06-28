@@ -162,10 +162,23 @@ bool SlideWindowEstimator::relativePose(Mat3d &relative_r, Vec3d &relative_t, in
     }
     return false;
 }
-
 bool SlideWindowEstimator::visualInitialAlign()
 {
-    return true;
+    Eigen::VectorXd xs;
+    bool result = VisualIMUAlignment(all_image_frame, bgs, g, t_ic, xs);
+    if (!result)
+        return result;
+
+    for (int i = 0; i <= m_state.frame_count; i++)
+    {
+        Mat3d ri = all_image_frame[timestamps[i]].r;
+        Vec3d pi = all_image_frame[timestamps[i]].t;
+        ps[i] = pi;
+        rs[i] = ri;
+        all_image_frame[timestamps[i]].is_keyframe = true;
+    }
+
+   
 }
 bool SlideWindowEstimator::initialStructure()
 {
@@ -192,7 +205,6 @@ bool SlideWindowEstimator::initialStructure()
     // 确定枢纽帧
     if (!relativePose(relative_r, relative_t, l))
         return false;
-    std::cout << "l: " << l << " " << relative_t.transpose() << std::endl;
     // 纯视觉初始化
     GlobalSFM sfm;
     Quatd qs[m_state.frame_count + 1];
@@ -265,7 +277,7 @@ bool SlideWindowEstimator::initialStructure()
         frame_it->second.r = r_pnp * r_ic.transpose();
         frame_it->second.t = t_pnp;
     }
-    
+
     // 视觉惯性对齐
     if (visualInitialAlign())
         return true;

@@ -37,6 +37,7 @@ public:
         loadParams();
         initSubscribers();
         m_estimator = std::make_shared<SlideWindowEstimator>(m_sw_config);
+        m_estimator->r_ic << 0.0148655429818, -0.999880929698, 0.00414029679422, 0.999557249008, 0.0149672133247, 0.025715529948, -0.0257744366974, 0.00375618835797, 0.999660727178;
         m_timer = m_nh.createTimer(ros::Duration(0.02), &EstimatorNode::mainCallback, this);
     }
 

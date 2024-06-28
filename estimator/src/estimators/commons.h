@@ -8,6 +8,15 @@
 
 const int WINDOW_SIZE = 10;
 
+enum StateOrder
+{
+    O_P = 0,
+    O_R = 3,
+    O_V = 6,
+    O_BA = 9,
+    O_BG = 12
+};
+
 using Vec2d = Eigen::Vector2d;
 using Vec3d = Eigen::Vector3d;
 using Mat3d = Eigen::Matrix3d;
