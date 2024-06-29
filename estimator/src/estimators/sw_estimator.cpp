@@ -5,7 +5,6 @@ SlideWindowEstimator::SlideWindowEstimator(const SWConfig &config) : feature_man
     g = Vec3d(0.0, 0.0, -9.81007);
     clearState();
 }
-
 void SlideWindowEstimator::clearState()
 {
     for (size_t i = 0; i < WINDOW_SIZE + 1; i++)
@@ -113,7 +112,6 @@ void SlideWindowEstimator::processFeature(const Feats &feats, double timestamp)
             }
             else
             {
-
                 slideWindow();
             }
         }
@@ -184,6 +182,47 @@ bool SlideWindowEstimator::visualInitialAlign()
     feature_manager.clearDepth(dep);
     feature_manager.setRic(r_ic);
     feature_manager.triangulate(rs, ps, r_ic, t_ic);
+
+    double s = (xs.tail<1>())(0);
+
+    for (int i = 0; i <= WINDOW_SIZE; i++)
+    {
+        integrations[i]->repropagate(Vec3d::Zero(), bgs[i]);
+    }
+    // 相对第一帧的位姿，坐标系是轴帧
+    for (int i = m_state.frame_count; i >= 0; i--)
+        ps[i] = s * ps[i] - rs[i] * t_ic - (s * ps[0] - rs[0] * t_ic);
+
+    int kv = -1;
+    std::map<double, ImageFrame>::iterator frame_i;
+    for (frame_i = all_image_frame.begin(); frame_i != all_image_frame.end(); frame_i++)
+    {
+        if (frame_i->second.is_keyframe)
+        {
+            kv++;
+            vs[kv] = frame_i->second.r * xs.segment<3>(kv * 3);
+        }
+    }
+    for (auto &it_per_id : feature_manager.features)
+    {
+        it_per_id.used_num = it_per_id.feature_per_frame.size();
+        if (!(it_per_id.used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
+            continue;
+        it_per_id.estimated_depth *= s;
+    }
+
+    Mat3d r0 = Quatd::FromTwoVectors(g.normalized(), Vec3d(0, 0, -1.0)).toRotationMatrix();
+    double yaw = rot2ypr(r0 * rs[0]).x();
+    r0 = ypr2rot(Eigen::Vector3d{-yaw, 0, 0}) * r0;
+    g = Vec3d(0, 0, -1.0) * g.norm();
+
+    for (int i = 0; i <= m_state.frame_count; i++)
+    {
+        ps[i] = r0 * ps[i];
+        rs[i] = r0 * rs[i];
+        vs[i] = r0 * vs[i];
+    }
+    return true;
 }
 bool SlideWindowEstimator::initialStructure()
 {
@@ -289,11 +328,100 @@ bool SlideWindowEstimator::initialStructure()
     else
         return false;
 }
-
 void SlideWindowEstimator::solveOdometry()
 {
+}
+void SlideWindowEstimator::slideWindowNew()
+{
+    feature_manager.removeFront(m_state.frame_count);
+}
+
+void SlideWindowEstimator::slideWindowOld()
+{
+    if (solve_flag == NON_LINEAR)
+    {
+        Mat3d r0, r1;
+        Vec3d p0, p1;
+        r0 = back_r0 * r_ic;
+        r1 = rs[0] * r_ic;
+        p0 = back_p0 + back_r0 * t_ic;
+        p1 = ps[0] + rs[0] * t_ic;
+        feature_manager.removeBackShiftDepth(r0, p0, r1, p1);
+    }
+    else
+        feature_manager.removeBack();
 }
 
 void SlideWindowEstimator::slideWindow()
 {
+    if (marginalization_flag == MARGIN_OLD)
+    {
+        double t_0 = timestamps[0];
+        back_r0 = rs[0];
+        back_p0 = ps[0];
+
+        if (m_state.frame_count == WINDOW_SIZE)
+        {
+            for (int i = 0; i < WINDOW_SIZE; i++)
+            {
+                rs[i].swap(rs[i + 1]);
+                integrations[i].swap(integrations[i + 1]);
+                dt_buf[i].swap(dt_buf[i + 1]);
+                linear_acceleration_buf[i].swap(linear_acceleration_buf[i + 1]);
+                angular_velocity_buf[i].swap(angular_velocity_buf[i + 1]);
+
+                timestamps[i] = timestamps[i + 1];
+                ps[i].swap(ps[i + 1]);
+                vs[i].swap(vs[i + 1]);
+                bas[i].swap(bas[i + 1]);
+                bgs[i].swap(bgs[i + 1]);
+            }
+
+            timestamps[WINDOW_SIZE] = timestamps[WINDOW_SIZE - 1];
+            ps[WINDOW_SIZE] = ps[WINDOW_SIZE - 1];
+            vs[WINDOW_SIZE] = vs[WINDOW_SIZE - 1];
+            rs[WINDOW_SIZE] = rs[WINDOW_SIZE - 1];
+            bas[WINDOW_SIZE] = bas[WINDOW_SIZE - 1];
+            bgs[WINDOW_SIZE] = bgs[WINDOW_SIZE - 1];
+
+            integrations[WINDOW_SIZE].reset(new Integration(m_state.acc_0, m_state.gyro_0, bas[WINDOW_SIZE], bgs[WINDOW_SIZE]));
+            dt_buf[WINDOW_SIZE].clear();
+            linear_acceleration_buf[WINDOW_SIZE].clear();
+            angular_velocity_buf[WINDOW_SIZE].clear();
+            if (!all_image_frame.empty())
+                std::map<double, ImageFrame>().swap(all_image_frame);
+            slideWindowOld();
+        }
+    }
+    else
+    {
+        if (m_state.frame_count == WINDOW_SIZE)
+        {
+            for (size_t i = 0; i < dt_buf[m_state.frame_count].size(); i++)
+            {
+                double tmp_dt = dt_buf[m_state.frame_count][i];
+                Vec3d tmp_linear_acceleration = linear_acceleration_buf[m_state.frame_count][i];
+                Vec3d tmp_angular_velocity = angular_velocity_buf[m_state.frame_count][i];
+
+                integrations[m_state.frame_count - 1]->push_back(tmp_dt, tmp_linear_acceleration, tmp_angular_velocity);
+
+                dt_buf[m_state.frame_count - 1].push_back(tmp_dt);
+                linear_acceleration_buf[m_state.frame_count - 1].push_back(tmp_linear_acceleration);
+                angular_velocity_buf[m_state.frame_count - 1].push_back(tmp_angular_velocity);
+            }
+
+            timestamps[m_state.frame_count - 1] = timestamps[m_state.frame_count];
+            ps[m_state.frame_count - 1] = ps[m_state.frame_count];
+            vs[m_state.frame_count - 1] = vs[m_state.frame_count];
+            rs[m_state.frame_count - 1] = rs[m_state.frame_count];
+            bas[m_state.frame_count - 1] = bas[m_state.frame_count];
+            bgs[m_state.frame_count - 1] = bgs[m_state.frame_count];
+
+            integrations[WINDOW_SIZE].reset(new Integration(m_state.acc_0, m_state.gyro_0, bas[WINDOW_SIZE], bgs[WINDOW_SIZE]));
+            dt_buf[WINDOW_SIZE].clear();
+            linear_acceleration_buf[WINDOW_SIZE].clear();
+            angular_velocity_buf[WINDOW_SIZE].clear();
+            slideWindowNew();
+        }
+    }
 }

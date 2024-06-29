@@ -164,3 +164,69 @@ void FeatureManager::triangulate(Mat3d rs[], Vec3d ps[], const Mat3d &ric, const
         }
     }
 }
+
+void FeatureManager::removeBackShiftDepth(const Mat3d &marg_R, const Vec3d &marg_P, const Mat3d &new_R, const Vec3d &new_P)
+{
+    for (auto it = features.begin(); it != features.end(); it++)
+    {
+        if (it->start_frame != 0)
+            it->start_frame--;
+        else
+        {
+            Vec3d uv_i = it->feature_per_frame[0].point;
+            it->feature_per_frame.erase(it->feature_per_frame.begin());
+            if (it->feature_per_frame.size() < 2)
+            {
+                features.erase(it);
+                continue;
+            }
+            else
+            {
+                Vec3d pts_i = uv_i * it->estimated_depth;
+                Vec3d w_pts_i = marg_R * pts_i + marg_P;
+                Vec3d pts_j = new_R.transpose() * (w_pts_i - new_P);
+                double dep_j = pts_j(2);
+                if (dep_j > 0)
+                    it->estimated_depth = dep_j;
+                else
+                    it->estimated_depth = 5.0;
+            }
+        }
+    }
+}
+
+void FeatureManager::removeBack()
+{
+    for (auto it = features.begin(); it != features.end(); it++)
+    {
+        if (it->start_frame != 0)
+            it->start_frame--;
+        else
+        {
+            it->feature_per_frame.erase(it->feature_per_frame.begin());
+            if (it->feature_per_frame.size() == 0) // 这边似乎也可以判定 < 2
+                features.erase(it);
+        }
+    }
+}
+
+void FeatureManager::removeFront(int frame_count)
+{
+    for (auto it = features.begin(); it != features.end(); it++)
+    {
+
+        if (it->start_frame == frame_count)
+        {
+            it->start_frame--;
+        }
+        else
+        {
+            int j = WINDOW_SIZE - 1 - it->start_frame;
+            if (it->endFrame() < frame_count - 1)
+                continue;
+            it->feature_per_frame.erase(it->feature_per_frame.begin() + j);
+            if (it->feature_per_frame.size() == 0)
+                features.erase(it);
+        }
+    }
+}

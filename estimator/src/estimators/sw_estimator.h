@@ -48,6 +48,10 @@ public:
 
     void solveOdometry();
 
+    void slideWindowNew();
+
+    void slideWindowOld();
+
     void slideWindow();
 
     SWMarginFlag marginalization_flag;
@@ -61,8 +65,8 @@ public:
     Vec3d bas[WINDOW_SIZE + 1];
     Vec3d bgs[WINDOW_SIZE + 1];
 
-    Mat3d last_r, last_r0, r_ic;
-    Vec3d last_p, last_p0, t_ic;
+    Mat3d back_r0, last_r, last_r0, r_ic;
+    Vec3d back_p0, last_p, last_p0, t_ic;
 
     double timestamps[WINDOW_SIZE + 1];
 
