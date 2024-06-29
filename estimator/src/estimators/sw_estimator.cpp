@@ -178,7 +178,12 @@ bool SlideWindowEstimator::visualInitialAlign()
         all_image_frame[timestamps[i]].is_keyframe = true;
     }
 
-   
+    Eigen::VectorXd dep = feature_manager.getDepthVector();
+    for (int i = 0; i < dep.size(); i++)
+        dep[i] = -1;
+    feature_manager.clearDepth(dep);
+    feature_manager.setRic(r_ic);
+    feature_manager.triangulate(rs, ps, r_ic, t_ic);
 }
 bool SlideWindowEstimator::initialStructure()
 {

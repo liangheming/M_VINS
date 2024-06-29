@@ -39,18 +39,26 @@ class FeatureManager
 public:
     FeatureManager(Mat3d _rs[]);
 
-    void setRic(const Mat3d _ric) { ric = _ric; }
+    void setRic(const Mat3d &_ric) { r_ic = _ric; }
 
     bool addFeatureCheckParallax(int frame_count, const Feats &feats, double td);
 
     double compensatedParallax2(const FeaturePerID &it_per_id, int frame_count);
 
-    void getCorresponding(int frame_count_l, int frame_count_r,std::vector<std::pair<Vec3d, Vec3d>> &corres);
+    void getCorresponding(int frame_count_l, int frame_count_r, std::vector<std::pair<Vec3d, Vec3d>> &corres);
+
+    int getFeatureCount();
+
+    Eigen::VectorXd getDepthVector();
+
+    void clearDepth(const Eigen::VectorXd &x);
+
+    void triangulate(Mat3d rs[], Vec3d ps[], const Mat3d &ric, const Vec3d &tic);
 
     double parallax_threshold = 10.0 / 460.0;
     std::list<FeaturePerID> features;
 
 private:
     const Mat3d *rs;
-    Mat3d ric;
+    Mat3d r_ic;
 };
