@@ -106,3 +106,30 @@ void Integration::repropagate(const Vec3d &_linearized_ba, const Vec3d &_lineari
     for (size_t i = 0; i < dt_buf.size(); i++)
         propagate(dt_buf[i], acc_buf[i], gyr_buf[i]);
 }
+
+Eigen::Matrix<double, 15, 1> Integration::evaluate(const Vec3d &pi, const Quatd &qi, const Vec3d &vi, const Vec3d &bai, const Vec3d &bgi,
+                                                   const Vec3d &pj, const Quatd &qj, const Vec3d &vj, const Vec3d &baj, const Vec3d &bgj, const Vec3d &g_vec)
+{
+    Eigen::Matrix<double, 15, 1> residuals;
+    Mat3d dp_dba = jacobian.block<3, 3>(O_P, O_BA);
+    Mat3d dp_dbg = jacobian.block<3, 3>(O_P, O_BG);
+    Mat3d dq_dbg = jacobian.block<3, 3>(O_R, O_BG);
+
+    Mat3d dv_dba = jacobian.block<3, 3>(O_V, O_BA);
+    Mat3d dv_dbg = jacobian.block<3, 3>(O_V, O_BG);
+
+    Vec3d dba = bai - linearized_ba;
+    Vec3d dbg = bgi - linearized_bg;
+    Mat3d corrected_delta_q = delta_q * Sophus::SO3d::exp(dq_dbg * dbg).matrix();
+    Vec3d corrected_delta_v = delta_v + dv_dba * dba + dv_dbg * dbg;
+    Vec3d corrected_delta_p = delta_p + dp_dba * dba + dp_dbg * dbg;
+
+    residuals.block<3, 1>(O_P, 0) = qi.inverse() * (0.5 * -g_vec * sum_dt * sum_dt + pj - pi - vi * sum_dt) - corrected_delta_p;
+    // 这里需要验证一下
+    residuals.block<3, 1>(O_R, 0) = 2 * (Quatd(corrected_delta_q).inverse() * (qi.inverse() * qj)).vec();
+    residuals.block<3, 1>(O_V, 0) = qi.inverse() * (-g_vec * sum_dt + vj - vi) - corrected_delta_v;
+    residuals.block<3, 1>(O_BA, 0) = baj - bai;
+    residuals.block<3, 1>(O_BG, 0) = bgj - bgi;
+
+    return residuals;
+}

@@ -110,6 +110,24 @@ Eigen::VectorXd FeatureManager::getDepthVector()
     return dep_vec;
 }
 
+void FeatureManager::setDepth(const Eigen::VectorXd &x)
+{
+    int feature_index = -1;
+    for (auto &it_per_id : features)
+    {
+        it_per_id.used_num = it_per_id.feature_per_frame.size();
+        if (!(it_per_id.used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
+            continue;
+
+        it_per_id.estimated_depth = 1.0 / x(++feature_index);
+        if (it_per_id.estimated_depth < 0)
+        {
+            it_per_id.solve_flag = 2;
+        }
+        else
+            it_per_id.solve_flag = 1;
+    }
+}
 void FeatureManager::clearDepth(const Eigen::VectorXd &x)
 {
     int feature_index = -1;

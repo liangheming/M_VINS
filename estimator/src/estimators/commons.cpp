@@ -38,7 +38,6 @@ bool solveRelativeRT(const std::vector<std::pair<Vec3d, Vec3d>> &corres, Mat3d &
         return false;
 }
 
-
 Vec3d rot2ypr(const Eigen::Matrix3d &R)
 {
     Vec3d n = R.col(0);
@@ -90,4 +89,43 @@ Mat3d rotFromG(const Eigen::Vector3d &g)
     R0 = ypr2rot(Eigen::Vector3d{-yaw, 0, 0}) * R0;
     // R0 = Utility::ypr2R(Eigen::Vector3d{-90, 0, 0}) * R0;
     return R0;
+}
+
+Quatd deltaQ(const Vec3d &theta)
+{
+
+    Quatd dq;
+    Vec3d half_theta = theta;
+    half_theta /= 2.0;
+    dq.w() = 1.0;
+    dq.x() = half_theta.x();
+    dq.y() = half_theta.y();
+    dq.z() = half_theta.z();
+    return dq;
+}
+
+
+Mat3d skewSymmetric(const Vec3d &q)
+{
+    Mat3d ans;
+    ans << 0.0, -q(2), q(1), q(2), 0.0, -q(0), -q(1), q(0), 0.0;
+    return ans;
+}
+
+Mat4d Qleft(const Quatd &q)
+{
+    Quatd qq = q;
+    Mat4d ans;
+    ans(0, 0) = qq.w(), ans.template block<1, 3>(0, 1) = -qq.vec().transpose();
+    ans.template block<3, 1>(1, 0) = qq.vec(), ans.template block<3, 3>(1, 1) = qq.w() * Mat3d::Identity() + skewSymmetric(qq.vec());
+    return ans;
+}
+
+Mat4d Qright(const Quatd &p)
+{
+    Quatd pp = p;
+    Mat4d ans;
+    ans(0, 0) = pp.w(), ans.template block<1, 3>(0, 1) = -pp.vec().transpose();
+    ans.template block<3, 1>(1, 0) = pp.vec(), ans.template block<3, 3>(1, 1) = pp.w() * Mat3d::Identity() - skewSymmetric(pp.vec());
+    return ans;
 }

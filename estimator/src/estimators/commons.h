@@ -18,6 +18,7 @@ enum StateOrder
 };
 
 using Vec2d = Eigen::Vector2d;
+using Mat2d = Eigen::Matrix2d;
 using Vec3d = Eigen::Vector3d;
 using Mat3d = Eigen::Matrix3d;
 using Vec4d = Eigen::Vector4d;
@@ -38,3 +39,11 @@ Vec3d rot2ypr(const Eigen::Matrix3d &R);
 Mat3d ypr2rot(const Vec3d &ypr);
 
 Mat3d rotFromG(const Eigen::Vector3d &g);
+
+Quatd deltaQ(const Vec3d &theta);
+
+Mat3d skewSymmetric(const Vec3d &q);
+
+Mat4d Qleft(const Quatd &q);
+
+Mat4d Qright(const Quatd &p);

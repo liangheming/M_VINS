@@ -328,9 +328,173 @@ bool SlideWindowEstimator::initialStructure()
     else
         return false;
 }
+
+void SlideWindowEstimator::vector2double()
+{
+    for (int i = 0; i <= WINDOW_SIZE; i++)
+    {
+        para_pose[i][0] = ps[i].x();
+        para_pose[i][1] = ps[i].y();
+        para_pose[i][2] = ps[i].z();
+        Quatd q(rs[i]);
+        para_pose[i][3] = q.x();
+        para_pose[i][4] = q.y();
+        para_pose[i][5] = q.z();
+        para_pose[i][6] = q.w();
+
+        para_speed_bias[i][0] = vs[i].x();
+        para_speed_bias[i][1] = vs[i].y();
+        para_speed_bias[i][2] = vs[i].z();
+
+        para_speed_bias[i][3] = bas[i].x();
+        para_speed_bias[i][4] = bas[i].y();
+        para_speed_bias[i][5] = bas[i].z();
+
+        para_speed_bias[i][6] = bgs[i].x();
+        para_speed_bias[i][7] = bgs[i].y();
+        para_speed_bias[i][8] = bgs[i].z();
+    }
+
+    para_ex_pose[0] = t_ic.x();
+    para_ex_pose[1] = t_ic.y();
+    para_ex_pose[2] = t_ic.z();
+    Quatd q(r_ic);
+    para_ex_pose[3] = q.x();
+    para_ex_pose[4] = q.y();
+    para_ex_pose[5] = q.z();
+    para_ex_pose[6] = q.w();
+
+    Eigen::VectorXd dep = feature_manager.getDepthVector();
+    int max_size = std::min(int(dep.size()), m_config.max_feature);
+    for (int i = 0; i < max_size; i++)
+        para_features[i][0] = dep(i);
+}
+void SlideWindowEstimator::double2vector()
+{
+    Vec3d origin_r0 = rot2ypr(rs[0]);
+    Vec3d origin_p0 = ps[0];
+
+    Vec3d optimized_r0 = rot2ypr(Quatd(para_pose[0][6], para_pose[0][3], para_pose[0][4], para_pose[0][5]).toRotationMatrix());
+    double y_diff = origin_r0.x() - optimized_r0.x();
+    Mat3d rot_diff = ypr2rot(Vec3d(y_diff, 0, 0));
+    if (abs(abs(origin_r0.y()) - 90) < 1.0 || abs(abs(optimized_r0.y()) - 90) < 1.0)
+    {
+        rot_diff = rs[0] * Quatd(para_pose[0][6], para_pose[0][3], para_pose[0][4], para_pose[0][5]).toRotationMatrix().transpose();
+    }
+
+    for (int i = 0; i <= WINDOW_SIZE; i++)
+    {
+
+        rs[i] = rot_diff * Quatd(para_pose[i][6], para_pose[i][3], para_pose[i][4], para_pose[i][5]).normalized().toRotationMatrix();
+
+        ps[i] = rot_diff * Vec3d(para_pose[i][0] - para_pose[0][0], para_pose[i][1] - para_pose[0][1], para_pose[i][2] - para_pose[0][2]) + origin_p0;
+
+        vs[i] = rot_diff * Vec3d(para_speed_bias[i][0], para_speed_bias[i][1], para_speed_bias[i][2]);
+
+        bas[i] = Vec3d(para_speed_bias[i][3], para_speed_bias[i][4], para_speed_bias[i][5]);
+
+        bgs[i] = Vec3d(para_speed_bias[i][6], para_speed_bias[i][7], para_speed_bias[i][8]);
+    }
+
+    t_ic = Vec3d(para_ex_pose[0],
+                 para_ex_pose[1],
+                 para_ex_pose[2]);
+    r_ic = Quatd(para_ex_pose[6], para_ex_pose[3], para_ex_pose[4], para_ex_pose[5]).toRotationMatrix();
+
+    Eigen::VectorXd dep = feature_manager.getDepthVector();
+    int max_size = std::min(int(dep.size()), m_config.max_feature);
+    for (int i = 0; i < max_size; i++)
+        dep(i) = para_features[i][0];
+    feature_manager.setDepth(dep);
+}
+
+void SlideWindowEstimator::optimization()
+{
+    ceres::Problem problem;
+    ceres::LossFunction *loss_function;
+    loss_function = new ceres::CauchyLoss(1.0);
+
+    for (int i = 0; i < WINDOW_SIZE + 1; i++)
+    {
+        ceres::LocalParameterization *local_parameterization = new PoseParameterization();
+        problem.AddParameterBlock(para_pose[i], 7, local_parameterization);
+        problem.AddParameterBlock(para_speed_bias[i], 9);
+    }
+
+    ceres::LocalParameterization *local_parameterization = new PoseParameterization();
+    problem.AddParameterBlock(para_ex_pose, 7, local_parameterization);
+    problem.SetParameterBlockConstant(para_ex_pose);
+
+    vector2double();
+
+    for (int i = 0; i < WINDOW_SIZE; i++)
+    {
+        int j = i + 1;
+        if (integrations[j]->sum_dt > 10.0)
+            continue;
+        IMUFactor *imu_factor = new IMUFactor(integrations[j], g);
+        problem.AddResidualBlock(imu_factor, NULL, para_pose[i], para_speed_bias[i], para_pose[j], para_speed_bias[j]);
+    }
+    Mat2d project_sqrt_info = 460.0 / 1.5 * Mat2d::Identity();
+    int f_m_cnt = 0;
+    int feature_index = -1;
+    for (auto &it_per_id : feature_manager.features)
+    {
+        it_per_id.used_num = it_per_id.feature_per_frame.size();
+        if (!(it_per_id.used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
+            continue;
+
+        ++feature_index;
+
+        if (feature_index >= m_config.max_feature)
+            break;
+
+        int imu_i = it_per_id.start_frame, imu_j = imu_i - 1;
+
+        Vec3d pts_i = it_per_id.feature_per_frame[0].point;
+
+        for (auto &it_per_frame : it_per_id.feature_per_frame)
+        {
+            imu_j++;
+            if (imu_i == imu_j)
+            {
+                continue;
+            }
+            Vec3d pts_j = it_per_frame.point;
+
+            ProjectionFactor *f = new ProjectionFactor(pts_i, pts_j, project_sqrt_info);
+            problem.AddResidualBlock(f, loss_function, para_pose[imu_i], para_pose[imu_j], para_ex_pose, para_features[feature_index]);
+            f_m_cnt++;
+        }
+    }
+
+    ceres::Solver::Options options;
+
+    options.linear_solver_type = ceres::DENSE_SCHUR;
+    options.trust_region_strategy_type = ceres::DOGLEG;
+    options.max_num_iterations = 8;
+    // options.use_explicit_schur_complement = true;
+    // options.minimizer_progress_to_stdout = true;
+    // options.use_nonmonotonic_steps = true;
+    if (marginalization_flag == MARGIN_OLD)
+        options.max_solver_time_in_seconds = 0.04 * 4.0 / 5.0;
+    else
+        options.max_solver_time_in_seconds = 0.04;
+    ceres::Solver::Summary summary;
+    ceres::Solve(options, &problem, &summary);
+    double2vector();
+}
 void SlideWindowEstimator::solveOdometry()
 {
+    if (m_state.frame_count < WINDOW_SIZE)
+        return;
+    if (solve_flag == NON_LINEAR)
+    {
+        feature_manager.triangulate(rs, ps, r_ic, t_ic);
+        optimization();
+    }
 }
+
 void SlideWindowEstimator::slideWindowNew()
 {
     feature_manager.removeFront(m_state.frame_count);

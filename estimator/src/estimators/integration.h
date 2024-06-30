@@ -12,6 +12,8 @@ public:
     void propagate(double _dt, const Vec3d &_acc_1, const Vec3d &_gyr_1);
     void midPointIntegration();
     void repropagate(const Vec3d &_linearized_ba, const Vec3d &_linearized_bg);
+    Eigen::Matrix<double, 15, 1> evaluate(const Vec3d &pi, const Quatd &qi, const Vec3d &vi, const Vec3d &bai, const Vec3d &bgi,
+                                          const Vec3d &pj, const Quatd &qj, const Vec3d &vj, const Vec3d &baj, const Vec3d &bgj, const Vec3d &g_vec);
 
     double dt;
     Vec3d acc_0, gyr_0, acc_1, gyr_1, linearized_ba, linearized_bg;

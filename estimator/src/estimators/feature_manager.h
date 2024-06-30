@@ -53,6 +53,8 @@ public:
 
     void clearDepth(const Eigen::VectorXd &x);
 
+    void setDepth(const Eigen::VectorXd &x);
+
     void triangulate(Mat3d rs[], Vec3d ps[], const Mat3d &ric, const Vec3d &tic);
 
     void removeBackShiftDepth(const Mat3d& marg_R, const Vec3d& marg_P, const Mat3d& new_R, const Vec3d& new_P);

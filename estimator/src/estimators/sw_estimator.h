@@ -4,6 +4,9 @@
 #include "initial_alignment.h"
 #include "feature_manager.h"
 #include "initial_sfm.h"
+#include "pose_parameterization.h"
+#include "imu_factor.h"
+#include "projection_factor.h"
 
 enum SWMarginFlag
 {
@@ -18,6 +21,9 @@ enum SolveFlag
 
 struct SWConfig
 {
+    int max_feature = 1000;
+    bool estimate_td = false;
+    bool estimate_ext = false;
 };
 struct SWState
 {
@@ -45,6 +51,12 @@ public:
     bool visualInitialAlign();
 
     bool initialStructure();
+
+    void vector2double();
+
+    void double2vector();
+
+    void optimization();
 
     void solveOdometry();
 
