@@ -104,11 +104,11 @@ void SlideWindowEstimator::processFeature(const Feats &feats, double timestamp)
                 solveOdometry();
                 slideWindow();
                 // 删除一些丢失的特征点
+                feature_manager.removeFailures();
                 last_r = rs[WINDOW_SIZE];
+                last_p = ps[WINDOW_SIZE];
                 last_r0 = rs[0];
-                last_p = ps[0];
                 last_p0 = ps[0];
-                exit(0);
             }
             else
             {
@@ -122,14 +122,24 @@ void SlideWindowEstimator::processFeature(const Feats &feats, double timestamp)
     }
     else
     {
+
         solveOdometry();
         // 失败检查
         slideWindow();
-        // 删除一些丢失的特征点
+        feature_manager.removeFailures();
         last_r = rs[WINDOW_SIZE];
+        last_p = ps[WINDOW_SIZE];
         last_r0 = rs[0];
-        last_p = ps[0];
         last_p0 = ps[0];
+    }
+
+    if (solve_flag == NON_LINEAR)
+    {
+        std::cout << "==============" << temp_count++ << "=================" << std::endl;
+        std::cout << "ps:" << ps[WINDOW_SIZE].transpose() << std::endl;
+        std::cout << "vs:" << vs[WINDOW_SIZE].transpose() << std::endl;
+        std::cout << "bas:" << bas[WINDOW_SIZE].transpose() << std::endl;
+        std::cout << "bgs:" << bgs[WINDOW_SIZE].transpose() << std::endl;
     }
 }
 bool SlideWindowEstimator::relativePose(Mat3d &relative_r, Vec3d &relative_t, int &l)
@@ -221,9 +231,15 @@ bool SlideWindowEstimator::visualInitialAlign()
         ps[i] = r0 * ps[i];
         rs[i] = r0 * rs[i];
         vs[i] = r0 * vs[i];
+
+        std::cout << "=================" << i << "================" << std::endl;
+        std::cout << ps[i].transpose() << std::endl;
+        std::cout << Eigen::Quaterniond(rs[i]).coeffs().transpose() << std::endl;
+        std::cout << vs[i].transpose() << std::endl;
     }
     return true;
 }
+
 bool SlideWindowEstimator::initialStructure()
 {
     std::vector<SFMFeature> sfm_f;
@@ -433,9 +449,13 @@ void SlideWindowEstimator::optimization()
         if (integrations[j]->sum_dt > 10.0)
             continue;
         IMUFactor *imu_factor = new IMUFactor(integrations[j], g);
+        // std::cout << "add imu factor " << i << " " << j << std::endl;
+        // std::cout << imu_factor->integration->delta_p.transpose() << j << std::endl;
+        // std::cout << imu_factor->integration->delta_v.transpose() << j << std::endl;
         problem.AddResidualBlock(imu_factor, NULL, para_pose[i], para_speed_bias[i], para_pose[j], para_speed_bias[j]);
     }
     Mat2d project_sqrt_info = 460.0 / 1.5 * Mat2d::Identity();
+
     int f_m_cnt = 0;
     int feature_index = -1;
     for (auto &it_per_id : feature_manager.features)
@@ -463,6 +483,7 @@ void SlideWindowEstimator::optimization()
             Vec3d pts_j = it_per_frame.point;
 
             ProjectionFactor *f = new ProjectionFactor(pts_i, pts_j, project_sqrt_info);
+            // std::cout << "add feature " << feature_index << " " << imu_i << " " << imu_j << " | " << para_features[feature_index][0] << std::endl;
             problem.AddResidualBlock(f, loss_function, para_pose[imu_i], para_pose[imu_j], para_ex_pose, para_features[feature_index]);
             f_m_cnt++;
         }
@@ -484,6 +505,7 @@ void SlideWindowEstimator::optimization()
     ceres::Solve(options, &problem, &summary);
     double2vector();
 }
+
 void SlideWindowEstimator::solveOdometry()
 {
     if (m_state.frame_count < WINDOW_SIZE)
@@ -520,10 +542,8 @@ void SlideWindowEstimator::slideWindow()
 {
     if (marginalization_flag == MARGIN_OLD)
     {
-        double t_0 = timestamps[0];
         back_r0 = rs[0];
         back_p0 = ps[0];
-
         if (m_state.frame_count == WINDOW_SIZE)
         {
             for (int i = 0; i < WINDOW_SIZE; i++)

@@ -94,6 +94,7 @@ public:
     std::vector<Vec3d> angular_velocity_buf[WINDOW_SIZE + 1];
     std::map<double, ImageFrame> all_image_frame;
     FeatureManager feature_manager;
+    size_t temp_count = 0;
 
 private:
     SWConfig m_config;

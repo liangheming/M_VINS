@@ -185,8 +185,9 @@ void FeatureManager::triangulate(Mat3d rs[], Vec3d ps[], const Mat3d &ric, const
 
 void FeatureManager::removeBackShiftDepth(const Mat3d &marg_R, const Vec3d &marg_P, const Mat3d &new_R, const Vec3d &new_P)
 {
-    for (auto it = features.begin(); it != features.end(); it++)
+    for (auto it = features.begin(), it_next = features.begin(); it != features.end(); it = it_next)
     {
+        it_next++;
         if (it->start_frame != 0)
             it->start_frame--;
         else
@@ -198,6 +199,7 @@ void FeatureManager::removeBackShiftDepth(const Mat3d &marg_R, const Vec3d &marg
                 features.erase(it);
                 continue;
             }
+
             else
             {
                 Vec3d pts_i = uv_i * it->estimated_depth;
@@ -215,8 +217,9 @@ void FeatureManager::removeBackShiftDepth(const Mat3d &marg_R, const Vec3d &marg
 
 void FeatureManager::removeBack()
 {
-    for (auto it = features.begin(); it != features.end(); it++)
+    for (auto it = features.begin(), it_next = features.begin(); it != features.end(); it = it_next)
     {
+        it_next++;
         if (it->start_frame != 0)
             it->start_frame--;
         else
@@ -230,13 +233,14 @@ void FeatureManager::removeBack()
 
 void FeatureManager::removeFront(int frame_count)
 {
-    for (auto it = features.begin(); it != features.end(); it++)
+    for (auto it = features.begin(), it_next = features.begin(); it != features.end(); it = it_next)
     {
+        it_next++;
 
         if (it->start_frame == frame_count)
-        {
+
             it->start_frame--;
-        }
+
         else
         {
             int j = WINDOW_SIZE - 1 - it->start_frame;
@@ -246,5 +250,16 @@ void FeatureManager::removeFront(int frame_count)
             if (it->feature_per_frame.size() == 0)
                 features.erase(it);
         }
+    }
+}
+
+void FeatureManager::removeFailures()
+{
+    for (auto it = features.begin(), it_next = features.begin();
+         it != features.end(); it = it_next)
+    {
+        it_next++;
+        if (it->solve_flag == 2)
+            features.erase(it);
     }
 }

@@ -39,7 +39,7 @@ bool ProjectionFactor::Evaluate(double const *const *parameters, double *residua
         Mat3d ri = qi.toRotationMatrix();
         Mat3d rj = qj.toRotationMatrix();
         Mat3d ric = qic.toRotationMatrix();
-        Eigen::Matrix<double, 2, 3> reduce;
+        Eigen::Matrix<double, 2, 3> reduce(2, 3);
 
         reduce << 1. / dep_j, 0, -pts_camera_j(0) / (dep_j * dep_j),
             0, 1. / dep_j, -pts_camera_j(1) / (dep_j * dep_j);
@@ -66,13 +66,13 @@ bool ProjectionFactor::Evaluate(double const *const *parameters, double *residua
         {
             Eigen::Map<Eigen::Matrix<double, 2, 7, Eigen::RowMajor>> jacobian_ex_pose(jacobians[2]);
             jacobian_ex_pose.setZero();
-            jacobian_ex_pose.block<2, 3>(0, 0) = reduce * ric.transpose() * (rj.transpose() * ri - Eigen::Matrix3d::Identity());
+            jacobian_ex_pose.block<2, 3>(0, 0) = reduce * ric.transpose() * (rj.transpose() * ri - Mat3d::Identity());
             jacobian_ex_pose.block<2, 3>(0, 3) = reduce * (Sophus::SO3d::hat(temp_r * pts_camera_i) - temp_r * Sophus::SO3d::hat(pts_camera_i) + Sophus::SO3d::hat(ric.transpose() * (rj.transpose() * (ri * tic + pi - pj) - tic)));
         }
         if (jacobians[3])
         {
             Eigen::Map<Vec2d> jacobian_feature(jacobians[3]);
-            jacobian_feature = -reduce * temp_r * pts_i * (inv_dep_i * inv_dep_i);
+            jacobian_feature = -reduce * temp_r * pts_i / (inv_dep_i * inv_dep_i);
         }
     }
     return true;

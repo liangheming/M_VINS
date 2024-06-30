@@ -120,7 +120,8 @@ Eigen::Matrix<double, 15, 1> Integration::evaluate(const Vec3d &pi, const Quatd 
 
     Vec3d dba = bai - linearized_ba;
     Vec3d dbg = bgi - linearized_bg;
-    Mat3d corrected_delta_q = delta_q * Sophus::SO3d::exp(dq_dbg * dbg).matrix();
+    // Mat3d corrected_delta_q = delta_q * Sophus::SO3d::exp(dq_dbg * dbg).matrix();
+    Mat3d corrected_delta_q = delta_q * deltaQ(dq_dbg * dbg);
     Vec3d corrected_delta_v = delta_v + dv_dba * dba + dv_dbg * dbg;
     Vec3d corrected_delta_p = delta_p + dp_dba * dba + dp_dbg * dbg;
 

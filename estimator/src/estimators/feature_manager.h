@@ -62,7 +62,7 @@ public:
     void removeBack();
 
     void removeFront(int frame_count);
-
+    void removeFailures();
     double parallax_threshold = 10.0 / 460.0;
     std::list<FeaturePerID> features;
 
