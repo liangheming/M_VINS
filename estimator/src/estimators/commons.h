@@ -7,6 +7,7 @@
 #include <opencv2/opencv.hpp>
 
 const int WINDOW_SIZE = 10;
+const int THREADS_NUM = 2;
 
 enum StateOrder
 {

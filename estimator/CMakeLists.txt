@@ -51,7 +51,8 @@ set(SRC_LIST src/estimators/commons.cpp
              src/estimators/initial_sfm.cpp
              src/estimators/pose_parameterization.cpp
              src/estimators/imu_factor.cpp
-             src/estimators/projection_factor.cpp)
+             src/estimators/projection_factor.cpp
+             src/estimators/marginalization_factor.cpp)
 
 add_executable(${PROJECT_NAME}_node src/estimator_node.cpp ${SRC_LIST})
 
