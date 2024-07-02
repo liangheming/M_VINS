@@ -7,6 +7,7 @@
 #include "pose_parameterization.h"
 #include "imu_factor.h"
 #include "projection_factor.h"
+#include "marginalization_factor.h"
 
 enum SWMarginFlag
 {
@@ -38,6 +39,9 @@ class SlideWindowEstimator
 {
 public:
     SlideWindowEstimator(const SWConfig &config);
+    ~SlideWindowEstimator();
+
+    SWState &state() { return m_state; }
 
     void clearState();
     void setConstGravity(const double &g_const) { g = Vec3d(0, 0, -g_const); }
@@ -95,6 +99,10 @@ public:
     std::map<double, ImageFrame> all_image_frame;
     FeatureManager feature_manager;
     size_t temp_count = 0;
+
+    std::shared_ptr<MarginalizationInfo> last_marginalization_info;
+    std::vector<double *> last_marginalization_parameter_blocks;
+    std::shared_ptr<std::ofstream> out_file;
 
 private:
     SWConfig m_config;

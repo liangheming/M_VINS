@@ -4,6 +4,7 @@
 #include <sensor_msgs/Imu.h>
 #include <queue>
 #include "estimators/sw_estimator.h"
+#include <tf/transform_broadcaster.h>
 
 struct NodeConfig
 {
@@ -13,24 +14,80 @@ struct NodeConfig
 struct NodeState
 {
     bool first_featur = true;
+
     double last_imu_time = 0.0;
+
     double last_feature_time = 0.0;
+
     double propagate_time = -1.0;
 
     std::mutex m_imu_mutex;
 
     std::mutex m_feature_mutex;
 
+    std::mutex state_mutex;
+
     std::queue<sensor_msgs::ImuConstPtr> imu_buf;
 
     std::queue<sensor_msgs::PointCloudConstPtr> feature_buf;
 
     std::pair<std::vector<sensor_msgs::ImuConstPtr>, sensor_msgs::PointCloudConstPtr> package;
+
+    bool init_imu = false;
+
+    double last_predict_time = -1.0;
+
+    Vec3d tmp_P = Vec3d::Zero();
+    Quatd tmp_Q = Quatd::Identity();
+    Vec3d tmp_V = Vec3d::Zero();
+    Vec3d tmp_Ba = Vec3d::Zero();
+    Vec3d tmp_Bg = Vec3d::Zero();
+    Vec3d acc_0 = Vec3d::Zero();
+    Vec3d gyr_0 = Vec3d::Zero();
 };
 
 class EstimatorNode
 {
 public:
+    void predict(const sensor_msgs::ImuConstPtr &imu_msg)
+    {
+        double t = imu_msg->header.stamp.toSec();
+        if (!m_node_state.init_imu)
+        {
+            m_node_state.last_predict_time = t;
+            m_node_state.init_imu = true;
+            return;
+        }
+        double dt = t - m_node_state.last_predict_time;
+        m_node_state.last_predict_time = t;
+        Vec3d linear_acceleration(imu_msg->linear_acceleration.x, imu_msg->linear_acceleration.y, imu_msg->linear_acceleration.z);
+        Vec3d angular_velocity(imu_msg->angular_velocity.x, imu_msg->angular_velocity.y, imu_msg->angular_velocity.z);
+        Vec3d un_acc_0 = m_node_state.tmp_Q * (m_node_state.acc_0 - m_node_state.tmp_Ba) + m_estimator->g;
+        Vec3d un_gyr = 0.5 * (m_node_state.gyr_0 + angular_velocity) - m_node_state.tmp_Bg;
+        m_node_state.tmp_Q = m_node_state.tmp_Q * deltaQ(un_gyr * dt);
+        Vec3d un_acc_1 = m_node_state.tmp_Q * (linear_acceleration - m_node_state.tmp_Ba) + m_estimator->g;
+        Vec3d un_acc = 0.5 * (un_acc_0 + un_acc_1);
+        m_node_state.tmp_P = m_node_state.tmp_P + dt * m_node_state.tmp_V + 0.5 * dt * dt * un_acc;
+        m_node_state.tmp_V = m_node_state.tmp_V + dt * un_acc;
+        m_node_state.acc_0 = linear_acceleration;
+        m_node_state.gyr_0 = angular_velocity;
+    }
+
+    void update()
+    {
+        m_node_state.last_predict_time = m_node_state.propagate_time;
+        m_node_state.tmp_P = m_estimator->ps[WINDOW_SIZE];
+        m_node_state.tmp_Q = m_estimator->rs[WINDOW_SIZE];
+        m_node_state.tmp_V = m_estimator->vs[WINDOW_SIZE];
+        m_node_state.tmp_Ba = m_estimator->bas[WINDOW_SIZE];
+        m_node_state.tmp_Bg = m_estimator->bgs[WINDOW_SIZE];
+        m_node_state.acc_0 = m_estimator->state().acc_0;
+        m_node_state.gyr_0 = m_estimator->state().gyro_0;
+
+        std::queue<sensor_msgs::ImuConstPtr> tmp_imu_buf = m_node_state.imu_buf;
+        for (sensor_msgs::ImuConstPtr tmp_imu_msg; !tmp_imu_buf.empty(); tmp_imu_buf.pop())
+            predict(tmp_imu_buf.front());
+    }
     EstimatorNode(NodeConfig &config) : m_nh("~"), m_node_config(config)
     {
         ROS_INFO("EstimatorNode Start!");
@@ -82,6 +139,10 @@ public:
         m_node_state.imu_buf.push(msg);
 
         // TODO 按IMU的频率更新ODOM
+        {
+            std::lock_guard<std::mutex> lg(m_node_state.state_mutex);
+            predict(msg);
+        }
     }
 
     bool syncPackage()
@@ -171,10 +232,33 @@ public:
             feats[id] = val;
         }
         m_estimator->processFeature(feats, feature_time);
+
+        if (m_estimator->solve_flag == SolveFlag::NON_LINEAR)
+        {
+            tf::Transform transform;
+            tf::Quaternion q;
+            Vec3d correct_t = m_estimator->ps[WINDOW_SIZE];
+            Quatd correct_q(m_estimator->rs[WINDOW_SIZE]);
+            transform.setOrigin(tf::Vector3(correct_t(0),
+                                            correct_t(1),
+                                            correct_t(2)));
+            q.setW(correct_q.w());
+            q.setX(correct_q.x());
+            q.setY(correct_q.y());
+            q.setZ(correct_q.z());
+            transform.setRotation(q);
+            m_br.sendTransform(tf::StampedTransform(transform, ros::Time().fromSec(feature_time), "world", "body"));
+        }
+
+        // m_node_state.state_mutex.lock();
+        // if (m_estimator->solve_flag == SolveFlag::NON_LINEAR)
+        //     update();
+        // m_node_state.state_mutex.unlock();
     }
 
 private:
     ros::NodeHandle m_nh;
+    tf::TransformBroadcaster m_br;
     NodeConfig m_node_config;
     NodeState m_node_state;
     SWConfig m_sw_config;

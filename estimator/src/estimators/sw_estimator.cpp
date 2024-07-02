@@ -4,6 +4,11 @@ SlideWindowEstimator::SlideWindowEstimator(const SWConfig &config) : feature_man
 {
     g = Vec3d(0.0, 0.0, -9.81007);
     clearState();
+    out_file = std::make_shared<std::ofstream>("/home/zhouzhou/output.txt");
+}
+SlideWindowEstimator::~SlideWindowEstimator()
+{
+    out_file->close();
 }
 void SlideWindowEstimator::clearState()
 {
@@ -32,6 +37,10 @@ void SlideWindowEstimator::clearState()
 
     marginalization_flag = SWMarginFlag::MARGIN_OLD;
     solve_flag = SolveFlag::INITIAL;
+
+    last_marginalization_info = nullptr;
+    last_marginalization_parameter_blocks.clear();
+
     all_image_frame.clear();
     last_r = Mat3d::Identity();
     last_r0 = Mat3d::Identity();
@@ -135,11 +144,15 @@ void SlideWindowEstimator::processFeature(const Feats &feats, double timestamp)
 
     if (solve_flag == NON_LINEAR)
     {
-        std::cout << "==============" << temp_count++ << "=================" << std::endl;
+        std::cout << "***********************" << temp_count++ << "***********************" << std::endl;
         std::cout << "ps:" << ps[WINDOW_SIZE].transpose() << std::endl;
         std::cout << "vs:" << vs[WINDOW_SIZE].transpose() << std::endl;
         std::cout << "bas:" << bas[WINDOW_SIZE].transpose() << std::endl;
         std::cout << "bgs:" << bgs[WINDOW_SIZE].transpose() << std::endl;
+        std::cout << "qs:" << Quatd(rs[WINDOW_SIZE]).coeffs().transpose() << std::endl;
+        Vec3d temp_p = ps[WINDOW_SIZE];
+        Quatd temp_q = Quatd(rs[WINDOW_SIZE]);
+        (*out_file) << std::fixed << std::setprecision(9) << timestamp << " " << temp_p.x() << " " << temp_p.y() << " " << temp_p.z() << " " << temp_q.x() << " " << temp_q.y() << " " << temp_q.z() << " " << temp_q.w() << std::endl;
     }
 }
 bool SlideWindowEstimator::relativePose(Mat3d &relative_r, Vec3d &relative_t, int &l)
@@ -239,7 +252,6 @@ bool SlideWindowEstimator::visualInitialAlign()
     }
     return true;
 }
-
 bool SlideWindowEstimator::initialStructure()
 {
     std::vector<SFMFeature> sfm_f;
@@ -344,7 +356,6 @@ bool SlideWindowEstimator::initialStructure()
     else
         return false;
 }
-
 void SlideWindowEstimator::vector2double()
 {
     for (int i = 0; i <= WINDOW_SIZE; i++)
@@ -423,7 +434,6 @@ void SlideWindowEstimator::double2vector()
         dep(i) = para_features[i][0];
     feature_manager.setDepth(dep);
 }
-
 void SlideWindowEstimator::optimization()
 {
     ceres::Problem problem;
@@ -442,6 +452,13 @@ void SlideWindowEstimator::optimization()
     problem.SetParameterBlockConstant(para_ex_pose);
 
     vector2double();
+   
+    if (last_marginalization_info != nullptr)
+    {
+        MarginalizationFactor *marginalization_factor = new MarginalizationFactor(last_marginalization_info);
+        problem.AddResidualBlock(marginalization_factor, NULL, last_marginalization_parameter_blocks);
+    }
+     
 
     for (int i = 0; i < WINDOW_SIZE; i++)
     {
@@ -449,9 +466,6 @@ void SlideWindowEstimator::optimization()
         if (integrations[j]->sum_dt > 10.0)
             continue;
         IMUFactor *imu_factor = new IMUFactor(integrations[j], g);
-        // std::cout << "add imu factor " << i << " " << j << std::endl;
-        // std::cout << imu_factor->integration->delta_p.transpose() << j << std::endl;
-        // std::cout << imu_factor->integration->delta_v.transpose() << j << std::endl;
         problem.AddResidualBlock(imu_factor, NULL, para_pose[i], para_speed_bias[i], para_pose[j], para_speed_bias[j]);
     }
     Mat2d project_sqrt_info = 460.0 / 1.5 * Mat2d::Identity();
@@ -483,7 +497,6 @@ void SlideWindowEstimator::optimization()
             Vec3d pts_j = it_per_frame.point;
 
             ProjectionFactor *f = new ProjectionFactor(pts_i, pts_j, project_sqrt_info);
-            // std::cout << "add feature " << feature_index << " " << imu_i << " " << imu_j << " | " << para_features[feature_index][0] << std::endl;
             problem.AddResidualBlock(f, loss_function, para_pose[imu_i], para_pose[imu_j], para_ex_pose, para_features[feature_index]);
             f_m_cnt++;
         }
@@ -504,8 +517,127 @@ void SlideWindowEstimator::optimization()
     ceres::Solver::Summary summary;
     ceres::Solve(options, &problem, &summary);
     double2vector();
-}
+    
+    if (marginalization_flag == MARGIN_OLD)
+    {
+        std::shared_ptr<MarginalizationInfo> marginalization_info = std::make_shared<MarginalizationInfo>();
+        vector2double();
+        if (last_marginalization_info != nullptr)
+        {
+            std::vector<int> drop_set;
+            for (int i = 0; i < static_cast<int>(last_marginalization_parameter_blocks.size()); i++)
+            {
+                if (last_marginalization_parameter_blocks[i] == para_pose[0] ||
+                    last_marginalization_parameter_blocks[i] == para_speed_bias[0])
+                    drop_set.push_back(i);
+            }
+            MarginalizationFactor *marginalization_factor = new MarginalizationFactor(last_marginalization_info);
+            ResidualBlockInfo *residual_block_info = new ResidualBlockInfo(marginalization_factor, NULL,
+                                                                           last_marginalization_parameter_blocks,
+                                                                           drop_set);
+            marginalization_info->addResidualBlockInfo(residual_block_info);
+        }
 
+        if (integrations[1]->sum_dt < 10.0)
+        {
+            IMUFactor *imu_factor = new IMUFactor(integrations[1], g);
+            ResidualBlockInfo *residual_block_info = new ResidualBlockInfo(imu_factor, NULL,
+                                                                           std::vector<double *>{para_pose[0], para_speed_bias[0], para_pose[1], para_speed_bias[1]},
+                                                                           std::vector<int>{0, 1});
+            marginalization_info->addResidualBlockInfo(residual_block_info);
+        }
+
+        int feature_index = -1;
+        for (auto &it_per_id : feature_manager.features)
+        {
+            it_per_id.used_num = it_per_id.feature_per_frame.size();
+            if (!(it_per_id.used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
+                continue;
+            ++feature_index;
+            int imu_i = it_per_id.start_frame, imu_j = imu_i - 1;
+            if (imu_i != 0)
+                continue;
+            Vec3d pts_i = it_per_id.feature_per_frame[0].point;
+            for (auto &it_per_frame : it_per_id.feature_per_frame)
+            {
+                imu_j++;
+                if (imu_i == imu_j)
+                    continue;
+                Vec3d pts_j = it_per_frame.point;
+
+                ProjectionFactor *f = new ProjectionFactor(pts_i, pts_j, project_sqrt_info);
+                ResidualBlockInfo *residual_block_info = new ResidualBlockInfo(f, loss_function,
+                                                                               std::vector<double *>{para_pose[imu_i], para_pose[imu_j], para_ex_pose, para_features[feature_index]},
+                                                                               std::vector<int>{0, 3});
+                marginalization_info->addResidualBlockInfo(residual_block_info);
+            }
+        }
+
+        marginalization_info->preMarginalize();
+        marginalization_info->marginalize();
+
+        std::unordered_map<long, double *> addr_shift;
+        for (int i = 1; i <= WINDOW_SIZE; i++)
+        {
+            addr_shift[reinterpret_cast<long>(para_pose[i])] = para_pose[i - 1];
+            addr_shift[reinterpret_cast<long>(para_speed_bias[i])] = para_speed_bias[i - 1];
+        }
+        addr_shift[reinterpret_cast<long>(para_ex_pose)] = para_ex_pose;
+        std::vector<double *> parameter_blocks = marginalization_info->getParameterBlocks(addr_shift);
+
+        last_marginalization_info = marginalization_info;
+        last_marginalization_parameter_blocks = parameter_blocks;
+    }
+    else
+    {
+        if (last_marginalization_info != nullptr &&
+            std::count(std::begin(last_marginalization_parameter_blocks), std::end(last_marginalization_parameter_blocks), para_pose[WINDOW_SIZE - 1]))
+        {
+            std::shared_ptr<MarginalizationInfo> marginalization_info = std::make_shared<MarginalizationInfo>();
+            vector2double();
+
+            std::vector<int> drop_set;
+            for (int i = 0; i < static_cast<int>(last_marginalization_parameter_blocks.size()); i++)
+            {
+                if (last_marginalization_parameter_blocks[i] == para_pose[WINDOW_SIZE - 1])
+                    drop_set.push_back(i);
+            }
+
+            MarginalizationFactor *marginalization_factor = new MarginalizationFactor(last_marginalization_info);
+            ResidualBlockInfo *residual_block_info = new ResidualBlockInfo(marginalization_factor, NULL,
+                                                                           last_marginalization_parameter_blocks,
+                                                                           drop_set);
+            marginalization_info->addResidualBlockInfo(residual_block_info);
+
+            marginalization_info->preMarginalize();
+
+            marginalization_info->marginalize();
+
+            std::unordered_map<long, double *> addr_shift;
+            for (int i = 0; i <= WINDOW_SIZE; i++)
+            {
+                if (i == WINDOW_SIZE - 1)
+                    continue;
+                else if (i == WINDOW_SIZE)
+                {
+                    addr_shift[reinterpret_cast<long>(para_pose[i])] = para_pose[i - 1];
+                    addr_shift[reinterpret_cast<long>(para_speed_bias[i])] = para_speed_bias[i - 1];
+                }
+                else
+                {
+                    addr_shift[reinterpret_cast<long>(para_pose[i])] = para_pose[i];
+                    addr_shift[reinterpret_cast<long>(para_speed_bias[i])] = para_speed_bias[i];
+                }
+            }
+
+            addr_shift[reinterpret_cast<long>(para_ex_pose)] = para_ex_pose;
+            std::vector<double *> parameter_blocks = marginalization_info->getParameterBlocks(addr_shift);
+            last_marginalization_info = marginalization_info;
+            last_marginalization_parameter_blocks = parameter_blocks;
+        }
+    }
+    
+}
 void SlideWindowEstimator::solveOdometry()
 {
     if (m_state.frame_count < WINDOW_SIZE)
@@ -516,12 +648,10 @@ void SlideWindowEstimator::solveOdometry()
         optimization();
     }
 }
-
 void SlideWindowEstimator::slideWindowNew()
 {
     feature_manager.removeFront(m_state.frame_count);
 }
-
 void SlideWindowEstimator::slideWindowOld()
 {
     if (solve_flag == NON_LINEAR)
@@ -537,7 +667,6 @@ void SlideWindowEstimator::slideWindowOld()
     else
         feature_manager.removeBack();
 }
-
 void SlideWindowEstimator::slideWindow()
 {
     if (marginalization_flag == MARGIN_OLD)
