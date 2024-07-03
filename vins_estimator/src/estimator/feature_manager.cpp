@@ -119,7 +119,7 @@ void FeatureManager::triangulate(Mat3d rs[], Vec3d ps[], const Mat3d &ric, const
         double svd_method = svd_V[2] / svd_V[3];
         it_per_id.estimated_depth = svd_method;
         it_per_id.is_depth_valid = true;
-        if (it_per_id.estimated_depth < 0.1)
+        if (it_per_id.estimated_depth < m_min_depth_threshold)
         {
             it_per_id.estimated_depth = 5.0;
             it_per_id.is_depth_valid = false;
@@ -172,7 +172,8 @@ void FeatureManager::removeBackShiftDepth(const Mat3d &marg_r, const Vec3d &marg
                 Vec3d w_pts_i = marg_r * pts_i + marg_p;
                 Vec3d pts_j = new_r.transpose() * (w_pts_i - new_p);
                 double dep_j = pts_j(2);
-                if (dep_j > 0)
+                // TODO check if (dep_j >0.0)
+                if (dep_j >= m_min_depth_threshold)
                 {
                     it->estimated_depth = dep_j;
                     it->is_depth_valid = true;

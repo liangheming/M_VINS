@@ -38,7 +38,6 @@ struct FeaturePoint
 class FeatureManager
 {
     FeatureManager();
-    FeatureManager(int min_track_count, double parallax_threshold) : m_min_track_count(min_track_count), m_parallax_threshold(parallax_threshold) {}
 
     double compensatedParallax2(const FeaturePoint &it_per_id, int frame_count);
 
@@ -55,10 +54,16 @@ class FeatureManager
     void removeFront(int frame_count);
 
     void removeFailures();
-    
+
     std::list<FeaturePoint> features;
+
+    int &minTrackCount() { return m_min_track_count; }
+    double &parallaxThreshold() { return m_parallax_threshold; }
+
+    double &minDepthThreshold() { return m_min_depth_threshold; }
 
 private:
     int m_min_track_count = 20;
+    double m_min_depth_threshold = 0.1;
     double m_parallax_threshold = 10.0 / 460.0;
 };
