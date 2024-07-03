@@ -33,6 +33,8 @@ using Quatd = Eigen::Quaterniond;
 
 Mat3d Jr(const Vec3d &val);
 
+Mat3d Jr_inv(const Vec3d &val);
+
 bool solveRelativeRT(const std::vector<std::pair<Vec3d, Vec3d>> &corres, Mat3d &rotation, Vec3d &translation);
 
 Vec3d rot2ypr(const Eigen::Matrix3d &R);

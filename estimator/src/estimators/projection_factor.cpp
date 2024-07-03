@@ -77,3 +77,10 @@ bool ProjectionFactor::Evaluate(double const *const *parameters, double *residua
     }
     return true;
 }
+//    max      0.419693
+//   mean      0.202101
+// median      0.233971
+//    min      0.008478
+//   rmse      0.216948
+//    sse      85.519789
+//    std      0.078876

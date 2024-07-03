@@ -127,8 +127,8 @@ Eigen::Matrix<double, 15, 1> Integration::evaluate(const Vec3d &pi, const Quatd 
 
     residuals.block<3, 1>(O_P, 0) = qi.inverse() * (0.5 * -g_vec * sum_dt * sum_dt + pj - pi - vi * sum_dt) - corrected_delta_p;
     // 这里需要验证一下
-    residuals.block<3, 1>(O_R, 0) = 2 * (Quatd(corrected_delta_q).inverse() * (qi.inverse() * qj)).vec();
-    // residuals.block<3, 1>(O_R, 0) = Sophus::SO3d(corrected_delta_q.transpose() * qi.inverse() * qj).log();
+    // residuals.block<3, 1>(O_R, 0) = 2 * (Quatd(corrected_delta_q).inverse() * (qi.inverse() * qj)).vec();
+    residuals.block<3, 1>(O_R, 0) = Sophus::SO3d(corrected_delta_q.transpose() * qi.inverse() * qj).log();
     residuals.block<3, 1>(O_V, 0) = qi.inverse() * (-g_vec * sum_dt + vj - vi) - corrected_delta_v;
     residuals.block<3, 1>(O_BA, 0) = baj - bai;
     residuals.block<3, 1>(O_BG, 0) = bgj - bgi;

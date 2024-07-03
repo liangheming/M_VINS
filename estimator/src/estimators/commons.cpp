@@ -5,6 +5,11 @@ Mat3d Jr(const Vec3d &val)
     return Sophus::SO3d::leftJacobian(val).transpose();
 }
 
+Mat3d Jr_inv(const Vec3d &val)
+{
+    return Sophus::SO3d::leftJacobianInverse(val).transpose();
+}
+
 bool solveRelativeRT(const std::vector<std::pair<Vec3d, Vec3d>> &corres, Mat3d &rotation, Vec3d &translation)
 {
     if (corres.size() < 15)
@@ -103,7 +108,6 @@ Quatd deltaQ(const Vec3d &theta)
     dq.z() = half_theta.z();
     return dq;
 }
-
 
 Mat3d skewSymmetric(const Vec3d &q)
 {
