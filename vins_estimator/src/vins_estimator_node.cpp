@@ -1,0 +1,195 @@
+#include <queue>
+#include <iostream>
+#include <ros/ros.h>
+
+#include <sensor_msgs/Imu.h>
+#include <sensor_msgs/PointCloud.h>
+#include <tf/transform_broadcaster.h>
+
+#include "estimator/commons.h"
+
+struct NodeConfig
+{
+    std::string feature_topic = "";
+    std::string imu_topic = "";
+};
+
+struct NodeState
+{
+    bool first_feature = true;
+    double last_imu_time = 0.0;
+    double last_feature_time = 0.0;
+    double propagate_time = -1.0;
+
+    std::mutex imu_mutex;
+    std::mutex feature_mutex;
+
+    std::queue<sensor_msgs::ImuConstPtr> imu_buf;
+    std::queue<sensor_msgs::PointCloudConstPtr> feature_buf;
+
+    std::pair<std::vector<sensor_msgs::ImuConstPtr>, sensor_msgs::PointCloudConstPtr> package;
+};
+
+class VinsEstimatorNode
+{
+public:
+    VinsEstimatorNode() : m_nh("~")
+    {
+        loadParams();
+        initSubscribers();
+        m_timer = m_nh.createTimer(ros::Duration(0.02), &VinsEstimatorNode::mainCallback, this);
+    }
+    void loadParams()
+    {
+        m_nh.param<std::string>("feature_topic", m_node_config.feature_topic, "");
+        m_nh.param<std::string>("imu_topic", m_node_config.imu_topic, "");
+    }
+    void initSubscribers()
+    {
+        m_feature_sub = m_nh.subscribe(m_node_config.feature_topic, 100, &VinsEstimatorNode::featureCallback, this);
+        m_imu_sub = m_nh.subscribe(m_node_config.imu_topic, 100, &VinsEstimatorNode::imuCallback, this);
+    }
+
+    void featureCallback(const sensor_msgs::PointCloudConstPtr &msg)
+    {
+        if (m_node_state.first_feature)
+        {
+            m_node_state.first_feature = false;
+            return;
+        }
+        if (msg->header.stamp.toSec() <= m_node_state.last_feature_time)
+        {
+            ROS_WARN("FEATURE MESSAGE IN DISORDER!");
+            return;
+        }
+        std::lock_guard<std::mutex> lock(m_node_state.feature_mutex);
+        m_node_state.last_feature_time = msg->header.stamp.toSec();
+        m_node_state.feature_buf.push(msg);
+    }
+
+    void imuCallback(const sensor_msgs::ImuConstPtr &msg)
+    {
+        if (msg->header.stamp.toSec() <= m_node_state.last_imu_time)
+        {
+            ROS_WARN("IMU MESSAGE IN DISORDER!");
+            return;
+        }
+        std::lock_guard<std::mutex> lock(m_node_state.imu_mutex);
+        m_node_state.last_imu_time = msg->header.stamp.toSec();
+        m_node_state.imu_buf.push(msg);
+    }
+    bool syncPackage()
+    {
+        // TODO: time estimator
+        if (m_node_state.imu_buf.empty() || m_node_state.feature_buf.empty())
+            return false;
+
+        if (m_node_state.imu_buf.back()->header.stamp.toSec() <= m_node_state.feature_buf.front()->header.stamp.toSec())
+            return false;
+
+        if (m_node_state.imu_buf.front()->header.stamp.toSec() >= m_node_state.feature_buf.front()->header.stamp.toSec())
+        {
+            m_node_state.feature_buf.pop();
+            return false;
+        }
+
+        m_node_state.package.second = m_node_state.feature_buf.front();
+
+        m_node_state.feature_mutex.lock();
+        m_node_state.feature_buf.pop();
+        m_node_state.feature_mutex.unlock();
+
+        m_node_state.package.first.clear();
+        {
+            std::lock_guard<std::mutex> lock(m_node_state.imu_mutex);
+            while (m_node_state.imu_buf.front()->header.stamp.toSec() < m_node_state.package.second->header.stamp.toSec())
+            {
+                m_node_state.package.first.push_back(m_node_state.imu_buf.front());
+                m_node_state.imu_buf.pop();
+            }
+            m_node_state.package.first.push_back(m_node_state.imu_buf.front());
+        }
+        return true;
+    }
+
+    void processImus()
+    {
+        ROS_INFO("Process Imus");
+        double feature_time = m_node_state.package.second->header.stamp.toSec();
+        for (auto &imu : m_node_state.package.first)
+        {
+            double imu_time = imu->header.stamp.toSec();
+            Vec3d acc1, gyro1;
+            if (imu_time <= feature_time)
+            {
+                if (m_node_state.propagate_time < 0.0)
+                    m_node_state.propagate_time = imu_time;
+                double dt = imu_time - m_node_state.propagate_time;
+                m_node_state.propagate_time = imu_time;
+                Vec3d acc = Vec3d(imu->linear_acceleration.x, imu->linear_acceleration.y, imu->linear_acceleration.z);
+                Vec3d gyro = Vec3d(imu->angular_velocity.x, imu->angular_velocity.y, imu->angular_velocity.z);
+                acc1 = acc;
+                gyro1 = gyro;
+                // m_estimator->processImu(dt, acc, gyro);
+            }
+            else
+            {
+                double dt_1 = feature_time - m_node_state.propagate_time;
+                double dt_2 = imu_time - feature_time;
+                m_node_state.propagate_time = feature_time;
+                double w1 = dt_2 / (dt_1 + dt_2);
+                double w2 = dt_1 / (dt_1 + dt_2);
+                Vec3d acc2 = Vec3d(imu->linear_acceleration.x, imu->linear_acceleration.y, imu->linear_acceleration.z);
+                Vec3d gyro2 = Vec3d(imu->angular_velocity.x, imu->angular_velocity.y, imu->angular_velocity.z);
+                Vec3d acc = acc1 * w1 + acc2 * w2;
+                Vec3d gyro = gyro1 * w1 + gyro2 * w2;
+                // m_estimator->processImu(dt_1, acc, gyro);
+            }
+        }
+    }
+    void processFeatures()
+    {
+        ROS_INFO("Process Features");
+        TrackedFeatures feats;
+        sensor_msgs::PointCloudConstPtr &feature = m_node_state.package.second;
+        for (size_t i = 0; i < feature->points.size(); i++)
+        {
+            double x = feature->points[i].x;
+            double y = feature->points[i].y;
+            double z = feature->points[i].z;
+            int id = feature->channels[0].values[i];
+            double u = feature->channels[1].values[i];
+            double v = feature->channels[2].values[i];
+            double vx = feature->channels[3].values[i];
+            double vy = feature->channels[4].values[i];
+            Vec7d val;
+            val << x, y, z, u, v, vx, vy;
+            feats[id] = val;
+        }
+        // m_estimator->processFeature(feats, feature->header.stamp.toSec());
+    }
+    void mainCallback(const ros::TimerEvent &event)
+    {
+        if (!syncPackage())
+            return;
+        processImus();
+        processFeatures();
+    }
+
+private:
+    ros::NodeHandle m_nh;
+    tf::TransformBroadcaster m_br;
+    NodeConfig m_node_config;
+    NodeState m_node_state;
+    ros::Subscriber m_feature_sub;
+    ros::Subscriber m_imu_sub;
+    ros::Timer m_timer;
+};
+
+int main(int argc, char **argv)
+{
+    ros::init(argc, argv, "vins_estimator");
+    VinsEstimatorNode node;
+    ros::spin();
+    return 0;
+}

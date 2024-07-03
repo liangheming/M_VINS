@@ -1,0 +1,19 @@
+camera:
+  width: 752
+  height: 480
+  fx: 4.616e+02
+  fy: 4.603e+02
+  cx: 3.630e+02
+  cy: 2.481e+02
+  k1: -2.917e-01
+  k2: 8.228e-02
+  p1: 5.333e-05
+  p2: -1.578e-04
+tracker:
+  equalize: true
+  focal_length: 460
+  f_threshold: 1.0
+  min_dist: 30
+  max_count: 150
+  window_size: 20
+

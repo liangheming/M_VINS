@@ -7,6 +7,7 @@
 #include <cv_bridge/cv_bridge.h>
 #include "camera_model/pinhole_camera.h"
 #include "feature_tracker.h"
+#include <yaml-cpp/yaml.h>
 
 struct NodeParams
 {
@@ -14,6 +15,7 @@ struct NodeParams
     std::string config_file;
     double freq;
 };
+
 struct NodeState
 {
     bool first_image_flag = true;
@@ -29,7 +31,6 @@ class FeatureTrackerNode
 public:
     FeatureTrackerNode() : m_nh("~")
     {
-        ROS_INFO("Feature tacker node start");
         loadParamsAndInit();
         initSubscribers();
         initPublishers();
@@ -37,11 +38,40 @@ public:
 
     void loadParamsAndInit()
     {
-        m_nh.param<std::string>("img_topic", m_params.img_topic, "/camera");
+        m_nh.param<std::string>("img_topic", m_params.img_topic, "camera");
         m_nh.param<std::string>("config_file", m_params.config_file, "nothing");
         m_nh.param<double>("freq", m_params.freq, 10.0);
+        YAML::Node config = YAML::LoadFile(m_params.config_file);
         PinholeParams pinhole_params;
         TrackerConfig tracker_config;
+        if (config)
+        {
+            ROS_INFO("[FeatureTracker] LOAD CONFIG FROM %s SUCCESS!", m_params.config_file.c_str());
+            const YAML::Node &camera_node = config["camera"];
+            pinhole_params.width = camera_node["width"].as<int>();
+            pinhole_params.height = camera_node["height"].as<int>();
+            pinhole_params.fx = camera_node["fx"].as<double>();
+            pinhole_params.fy = camera_node["fy"].as<double>();
+            pinhole_params.cx = camera_node["cx"].as<double>();
+            pinhole_params.cy = camera_node["cy"].as<double>();
+            pinhole_params.k1 = camera_node["k1"].as<double>();
+            pinhole_params.k2 = camera_node["k2"].as<double>();
+            pinhole_params.p1 = camera_node["p1"].as<double>();
+            pinhole_params.p2 = camera_node["p2"].as<double>();
+
+            const YAML::Node &tracker_node = config["tracker"];
+            tracker_config.equalize = tracker_node["equalize"].as<bool>();
+            tracker_config.f_threshold = tracker_node["f_threshold"].as<double>();
+            tracker_config.focal_length = tracker_node["focal_length"].as<double>();
+            tracker_config.min_dist = tracker_node["min_dist"].as<int>();
+            tracker_config.max_count = tracker_node["max_count"].as<int>();
+            tracker_config.window_size = tracker_node["window_size"].as<int>();
+        }
+        else
+        {
+            ROS_WARN("[FeatureTracker] LOAD CONFIG FROM %s FAILED!", m_params.config_file.c_str());
+        }
+
         m_tracker = std::make_shared<FeatureTracker>(tracker_config, std::make_shared<PinholeCamera>(pinhole_params));
     }
 

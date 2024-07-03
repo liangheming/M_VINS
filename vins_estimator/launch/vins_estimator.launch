@@ -1,13 +1,13 @@
 <launch>
     <node pkg="feature_tracker" type="feature_tracker_node" name="feature_tracker" output="screen">
         <param name="img_topic" value="/cam0/image_raw"/>
-        <param name="config_file" value="$(find feature_tracker)/config/camera.yaml"/>
+        <param name="config_file" value="$(find feature_tracker)/config/euroc.yaml"/>
         <param name="freq" value = "10.0"/>
     </node>
     
-    <node pkg="estimator" type="estimator_node" name="estimator_node" output="screen">
+    <node pkg="vins_estimator" type="vins_estimator_node" name="vins_estimator_node" output="screen">
         <param name="feature_topic" value="/feature_tracker/feature"/>
         <param name="imu_topic" value="/imu0"/>
-        <param name="config_file" value="$(find estimator)/config/camera.yaml"/>
+        <!-- <param name="config_file" value="$(find estimator)/config/camera.yaml"/> -->
     </node>
 </launch>
