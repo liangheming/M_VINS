@@ -35,9 +35,19 @@ include_directories(
   ${Ceres_INCLUDE_DIRS}
 )
 
-set(SRC_LIST src/estimator/commons.cpp)
+set(SRC_LIST src/estimator/commons.cpp
+             src/estimator/integration.cpp
+             src/estimator/initial_sfm.cpp
+             src/estimator/initial_alignment.cpp
+             src/estimator/feature_manager.cpp
+             src/estimator/sw_estimator.cpp
+             src/estimator/factors/imu_factor.cpp
+             src/estimator/factors/projection_factor.cpp
+             src/estimator/factors/pose_parameterization.cpp
+             src/estimator/factors/marginalization_factor.cpp
+            )
 
-add_executable(${PROJECT_NAME}_node src/vins_estimator_node.cpp)
+add_executable(${PROJECT_NAME}_node src/vins_estimator_node.cpp ${SRC_LIST})
 
 
 target_link_libraries(${PROJECT_NAME}_node

@@ -221,3 +221,20 @@ void FeatureManager::removeFailures()
             features.erase(it);
     }
 }
+
+void FeatureManager::updateCachedFeatures(int max_size)
+{
+    cached_features.clear();
+    int valid_count = 0;
+    for (auto it_per_id = features.begin(); it_per_id != features.end(); it_per_id++)
+    {
+        int used_num = static_cast<int>(it_per_id->observations.size());
+        if (!(used_num >= 2 && it_per_id->start_frame < WINDOW_SIZE - 2))
+            continue;
+        if (!it_per_id->is_depth_valid)
+            continue;
+        if (valid_count++ >= max_size)
+            break;
+        cached_features.push_back(it_per_id);
+    }
+}

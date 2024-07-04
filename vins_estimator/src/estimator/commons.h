@@ -7,6 +7,9 @@
 
 const int WINDOW_SIZE = 10;
 const int THREADS_NUM = 2;
+const int POSE_SIZE = 7;
+const int SPEEDBIAS_SIZE = 9;
+const int MAX_FEATURE_SIZE = 1000;
 
 using Vec2d = Eigen::Vector2d;
 using Mat2d = Eigen::Matrix2d;
@@ -33,3 +36,9 @@ enum StateOrder
 Mat3d Jr(const Vec3d &val);
 
 Mat3d Jr_inv(const Vec3d &val);
+
+bool solveRelativeRT(const std::vector<std::pair<Vec3d, Vec3d>> &corres, Mat3d &rotation, Vec3d &translation, const double &ransac_threshold);
+
+Vec3d rot2ypr(const Eigen::Matrix3d &R);
+
+Mat3d ypr2rot(const Vec3d &ypr);

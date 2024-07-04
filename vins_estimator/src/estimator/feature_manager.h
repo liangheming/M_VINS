@@ -37,7 +37,8 @@ struct FeaturePoint
 
 class FeatureManager
 {
-    FeatureManager();
+public:
+    FeatureManager() { cached_features.reserve(MAX_FEATURE_SIZE); }
 
     double compensatedParallax2(const FeaturePoint &it_per_id, int frame_count);
 
@@ -54,13 +55,15 @@ class FeatureManager
     void removeFront(int frame_count);
 
     void removeFailures();
+    int &minTrackCount() { return m_min_track_count; }
+    double &parallaxThreshold() { return m_parallax_threshold; }
+    double &minDepthThreshold() { return m_min_depth_threshold; }
+
+    void updateCachedFeatures(int max_size);
 
     std::list<FeaturePoint> features;
 
-    int &minTrackCount() { return m_min_track_count; }
-    double &parallaxThreshold() { return m_parallax_threshold; }
-
-    double &minDepthThreshold() { return m_min_depth_threshold; }
+    std::vector<std::list<FeaturePoint>::iterator> cached_features;
 
 private:
     int m_min_track_count = 20;

@@ -7,6 +7,7 @@
 #include <tf/transform_broadcaster.h>
 
 #include "estimator/commons.h"
+#include "estimator/sw_estimator.h"
 
 struct NodeConfig
 {
@@ -37,12 +38,17 @@ public:
     {
         loadParams();
         initSubscribers();
+
+        m_sw_estimator = std::make_shared<SlidingWindowEstimator>(m_estimator_config);
         m_timer = m_nh.createTimer(ros::Duration(0.02), &VinsEstimatorNode::mainCallback, this);
     }
     void loadParams()
     {
         m_nh.param<std::string>("feature_topic", m_node_config.feature_topic, "");
         m_nh.param<std::string>("imu_topic", m_node_config.imu_topic, "");
+        m_estimator_config.g_norm = 9.81007;
+        m_estimator_config.ric << 0.0148655429818, -0.999880929698, 0.00414029679422, 0.999557249008, 0.0149672133247, 0.025715529948, -0.0257744366974, 0.00375618835797, 0.999660727178;
+        m_estimator_config.tic << -0.0216401454975, -0.064676986768, 0.00981073058949;
     }
     void initSubscribers()
     {
@@ -114,7 +120,6 @@ public:
 
     void processImus()
     {
-        ROS_INFO("Process Imus");
         double feature_time = m_node_state.package.second->header.stamp.toSec();
         for (auto &imu : m_node_state.package.first)
         {
@@ -130,7 +135,7 @@ public:
                 Vec3d gyro = Vec3d(imu->angular_velocity.x, imu->angular_velocity.y, imu->angular_velocity.z);
                 acc1 = acc;
                 gyro1 = gyro;
-                // m_estimator->processImu(dt, acc, gyro);
+                m_sw_estimator->processImu(dt, acc, gyro);
             }
             else
             {
@@ -143,13 +148,12 @@ public:
                 Vec3d gyro2 = Vec3d(imu->angular_velocity.x, imu->angular_velocity.y, imu->angular_velocity.z);
                 Vec3d acc = acc1 * w1 + acc2 * w2;
                 Vec3d gyro = gyro1 * w1 + gyro2 * w2;
-                // m_estimator->processImu(dt_1, acc, gyro);
+                m_sw_estimator->processImu(dt_1, acc, gyro);
             }
         }
     }
     void processFeatures()
     {
-        ROS_INFO("Process Features");
         TrackedFeatures feats;
         sensor_msgs::PointCloudConstPtr &feature = m_node_state.package.second;
         for (size_t i = 0; i < feature->points.size(); i++)
@@ -166,7 +170,7 @@ public:
             val << x, y, z, u, v, vx, vy;
             feats[id] = val;
         }
-        // m_estimator->processFeature(feats, feature->header.stamp.toSec());
+        m_sw_estimator->processFeature(feats, feature->header.stamp.toSec());
     }
     void mainCallback(const ros::TimerEvent &event)
     {
@@ -184,6 +188,8 @@ private:
     ros::Subscriber m_feature_sub;
     ros::Subscriber m_imu_sub;
     ros::Timer m_timer;
+    EstimatorConfig m_estimator_config;
+    std::shared_ptr<SlidingWindowEstimator> m_sw_estimator;
 };
 
 int main(int argc, char **argv)
