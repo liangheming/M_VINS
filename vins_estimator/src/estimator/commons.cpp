@@ -82,3 +82,14 @@ Mat3d ypr2rot(const Vec3d &ypr)
 
     return Rz * Ry * Rx;
 }
+
+Mat3d rotFromG(const Eigen::Vector3d &g)
+{
+    Mat3d R0;
+    Vec3d ng1 = g.normalized();
+    Vec3d ng2{0, 0, -1.0};
+    R0 = Quatd::FromTwoVectors(ng1, ng2).toRotationMatrix();
+    double yaw = rot2ypr(R0).x();
+    R0 = ypr2rot(Vec3d{-yaw, 0, 0}) * R0;
+    return R0;
+}

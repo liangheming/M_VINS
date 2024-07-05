@@ -76,8 +76,6 @@ class SlidingWindowEstimator
 public:
     SlidingWindowEstimator(const EstimatorConfig &m_config);
 
-    ~SlidingWindowEstimator() { out_file->close(); }
-
     void reset();
 
     void processImu(const double &dt, const Vec3d &acc, const Vec3d &gyro);
@@ -117,8 +115,8 @@ public:
     FeatureManager feature_manager;
     std::map<double, ImageFrame> all_image_frame;
 
-    size_t temp_count = 0;
-    std::shared_ptr<std::ofstream> out_file;
+    // size_t temp_count = 0;
+    // std::shared_ptr<std::ofstream> out_file;
 
 private:
     EstimatorConfig m_config;

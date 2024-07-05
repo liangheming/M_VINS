@@ -42,3 +42,5 @@ bool solveRelativeRT(const std::vector<std::pair<Vec3d, Vec3d>> &corres, Mat3d &
 Vec3d rot2ypr(const Eigen::Matrix3d &R);
 
 Mat3d ypr2rot(const Vec3d &ypr);
+
+Mat3d rotFromG(const Eigen::Vector3d &g);

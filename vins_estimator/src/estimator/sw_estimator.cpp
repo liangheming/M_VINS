@@ -3,7 +3,6 @@
 SlidingWindowEstimator::SlidingWindowEstimator(const EstimatorConfig &config) : m_config(config)
 {
     reset();
-    out_file = std::make_shared<std::ofstream>("/home/zhouzhou/new_out.txt");
 }
 void SlidingWindowEstimator::reset()
 {
@@ -141,18 +140,18 @@ void SlidingWindowEstimator::processFeature(const TrackedFeatures &feats, double
         m_state.last_p0 = m_state.ps[0];
     }
 
-    if (solve_flag == NON_LINEAR)
-    {
-        std::cout << "***********************" << temp_count++ << "***********************" << std::endl;
-        std::cout << "ps:" << m_state.ps[WINDOW_SIZE].transpose() << std::endl;
-        std::cout << "vs:" << m_state.vs[WINDOW_SIZE].transpose() << std::endl;
-        std::cout << "bas:" << m_state.bas[WINDOW_SIZE].transpose() << std::endl;
-        std::cout << "bgs:" << m_state.bgs[WINDOW_SIZE].transpose() << std::endl;
-        std::cout << "qs:" << Quatd(m_state.rs[WINDOW_SIZE]).coeffs().transpose() << std::endl;
-        Vec3d temp_p = m_state.ps[WINDOW_SIZE];
-        Quatd temp_q = Quatd(m_state.rs[WINDOW_SIZE]);
-        (*out_file) << std::fixed << std::setprecision(9) << timestamp << " " << temp_p.x() << " " << temp_p.y() << " " << temp_p.z() << " " << temp_q.x() << " " << temp_q.y() << " " << temp_q.z() << " " << temp_q.w() << std::endl;
-    }
+    // if (solve_flag == NON_LINEAR)
+    // {
+    //     std::cout << "***********************" << temp_count++ << "***********************" << std::endl;
+    //     std::cout << "ps:" << m_state.ps[WINDOW_SIZE].transpose() << std::endl;
+    //     std::cout << "vs:" << m_state.vs[WINDOW_SIZE].transpose() << std::endl;
+    //     std::cout << "bas:" << m_state.bas[WINDOW_SIZE].transpose() << std::endl;
+    //     std::cout << "bgs:" << m_state.bgs[WINDOW_SIZE].transpose() << std::endl;
+    //     std::cout << "qs:" << Quatd(m_state.rs[WINDOW_SIZE]).coeffs().transpose() << std::endl;
+    //     Vec3d temp_p = m_state.ps[WINDOW_SIZE];
+    //     Quatd temp_q = Quatd(m_state.rs[WINDOW_SIZE]);
+    //     (*out_file) << std::fixed << std::setprecision(9) << timestamp << " " << temp_p.x() << " " << temp_p.y() << " " << temp_p.z() << " " << temp_q.x() << " " << temp_q.y() << " " << temp_q.z() << " " << temp_q.w() << std::endl;
+    // }
 }
 void SlidingWindowEstimator::slideWindowNew()
 {
@@ -454,10 +453,15 @@ void SlidingWindowEstimator::afterVisualInitialAlign(Eigen::VectorXd &xs)
         it_per_id.estimated_depth *= s;
     }
 
-    Mat3d r0 = Quatd::FromTwoVectors(m_state.gravity.normalized(), Vec3d(0, 0, -1.0)).toRotationMatrix();
+    // Mat3d r0 = Quatd::FromTwoVectors(m_state.gravity.normalized(), Vec3d(0, 0, -1.0)).toRotationMatrix();
+    // double yaw = rot2ypr(r0 * m_state.rs[0]).x();
+    // r0 = ypr2rot(Eigen::Vector3d{-yaw, 0, 0}) * r0;
+    // m_state.gravity = Vec3d(0, 0, -1.0) * m_state.gravity.norm();
+
+    Mat3d r0 = rotFromG(m_state.gravity);
     double yaw = rot2ypr(r0 * m_state.rs[0]).x();
-    r0 = ypr2rot(Eigen::Vector3d{-yaw, 0, 0}) * r0;
-    m_state.gravity = Vec3d(0, 0, -1.0) * m_state.gravity.norm();
+    r0 = ypr2rot(Vec3d{-yaw, 0, 0}) * r0;
+    m_state.gravity = r0 * m_state.gravity;
 
     for (int i = 0; i <= m_state.frame_count; i++)
     {
