@@ -8,6 +8,9 @@
     <node pkg="vins_estimator" type="vins_estimator_node" name="vins_estimator" output="screen">
         <param name="feature_topic" value="/feature_tracker/feature"/>
         <param name="imu_topic" value="/imu0"/>
-        <!-- <param name="config_file" value="$(find estimator)/config/camera.yaml"/> -->
+    </node>
+    <node pkg="odom_recorder" type="odom_recorder_node" name="odom_recorder" output="screen">
+        <param name="odom_topic" value="/vins_estimator/odom"/>
+        <param name="save_text_path" value="/home/zhouzhou/temp/MH_01_M.csv"/>
     </node>
 </launch>

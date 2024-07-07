@@ -4,9 +4,9 @@ Eigen::MatrixXd TangentBasis(Vec3d &g0)
 {
     Vec3d b, c;
     Vec3d a = g0.normalized();
-    Vec3d tmp(0, 0, 1);
+    Vec3d tmp(0, 0, -1.0);
     if (a == tmp)
-        tmp << 1, 0, 0;
+        tmp << -1.0, 0, 0;
     b = (tmp - a * (a.transpose() * tmp)).normalized();
     c = a.cross(b);
     Eigen::MatrixXd bc(3, 2);

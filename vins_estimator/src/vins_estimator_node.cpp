@@ -5,6 +5,7 @@
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/PointCloud.h>
 #include <tf/transform_broadcaster.h>
+#include <nav_msgs/Odometry.h>
 
 #include "estimator/commons.h"
 #include "estimator/sw_estimator.h"
@@ -13,6 +14,8 @@ struct NodeConfig
 {
     std::string feature_topic = "";
     std::string imu_topic = "";
+    std::string map_frame = "camera";
+    std::string body_frame = "body";
 };
 
 struct NodeState
@@ -38,6 +41,7 @@ public:
     {
         loadParams();
         initSubscribers();
+        initPublisher();
 
         m_sw_estimator = std::make_shared<SlidingWindowEstimator>(m_estimator_config);
         m_timer = m_nh.createTimer(ros::Duration(0.02), &VinsEstimatorNode::mainCallback, this);
@@ -55,7 +59,10 @@ public:
         m_feature_sub = m_nh.subscribe(m_node_config.feature_topic, 100, &VinsEstimatorNode::featureCallback, this);
         m_imu_sub = m_nh.subscribe(m_node_config.imu_topic, 100, &VinsEstimatorNode::imuCallback, this);
     }
-
+    void initPublisher()
+    {
+        m_odom_pub = m_nh.advertise<nav_msgs::Odometry>("odom", 100);
+    }
     void featureCallback(const sensor_msgs::PointCloudConstPtr &msg)
     {
         if (m_node_state.first_feature)
@@ -172,12 +179,38 @@ public:
         }
         m_sw_estimator->processFeature(feats, feature->header.stamp.toSec());
     }
+    void publishOdom()
+    {
+        if (m_odom_pub.getNumSubscribers() < 1)
+            return;
+        nav_msgs::Odometry msg;
+        Vec3d position = m_sw_estimator->state().ps[WINDOW_SIZE];
+        Mat3d rotation = m_sw_estimator->state().rs[WINDOW_SIZE];
+        Quatd quat(rotation);
+        msg.header.stamp = ros::Time().fromSec(m_node_state.propagate_time);
+        msg.header.frame_id = m_node_config.map_frame;
+        msg.child_frame_id = m_node_config.body_frame;
+        msg.pose.pose.position.x = position.x();
+        msg.pose.pose.position.y = position.y();
+        msg.pose.pose.position.z = position.z();
+        msg.pose.pose.orientation.x = quat.x();
+        msg.pose.pose.orientation.y = quat.y();
+        msg.pose.pose.orientation.z = quat.z();
+        msg.pose.pose.orientation.w = quat.w();
+        msg.twist.twist.linear.x = m_sw_estimator->state().vs[WINDOW_SIZE].x();
+        msg.twist.twist.linear.y = m_sw_estimator->state().vs[WINDOW_SIZE].y();
+        msg.twist.twist.linear.z = m_sw_estimator->state().vs[WINDOW_SIZE].z();
+        m_odom_pub.publish(msg);
+    }
     void mainCallback(const ros::TimerEvent &event)
     {
         if (!syncPackage())
             return;
         processImus();
         processFeatures();
+        if (m_sw_estimator->solve_flag == SolveFlag::INITIAL)
+            return;
+        publishOdom();
     }
 
 private:
@@ -187,6 +220,7 @@ private:
     NodeState m_node_state;
     ros::Subscriber m_feature_sub;
     ros::Subscriber m_imu_sub;
+    ros::Publisher m_odom_pub;
     ros::Timer m_timer;
     EstimatorConfig m_estimator_config;
     std::shared_ptr<SlidingWindowEstimator> m_sw_estimator;
