@@ -48,6 +48,7 @@ public:
     }
     void loadParams()
     {
+        ROS_INFO("[VinsEstimator] LOAD CONFIG");
         m_nh.param<std::string>("feature_topic", m_node_config.feature_topic, "");
         m_nh.param<std::string>("imu_topic", m_node_config.imu_topic, "");
         m_estimator_config.g_norm = 9.81007;
@@ -61,7 +62,9 @@ public:
     }
     void initPublisher()
     {
-        m_odom_pub = m_nh.advertise<nav_msgs::Odometry>("odom", 100);
+        m_odom_pub = m_nh.advertise<nav_msgs::Odometry>("vio_odom", 100);
+        m_keyframe_odom_pub = m_nh.advertise<nav_msgs::Odometry>("keyframe_odom", 100);
+        m_keyframe_point_pub = m_nh.advertise<sensor_msgs::PointCloud>("keyframe_points", 100);
     }
     void featureCallback(const sensor_msgs::PointCloudConstPtr &msg)
     {
@@ -183,6 +186,8 @@ public:
     {
         if (m_odom_pub.getNumSubscribers() < 1)
             return;
+        if (m_sw_estimator->solve_flag == SolveFlag::INITIAL)
+            return;
         nav_msgs::Odometry msg;
         Vec3d position = m_sw_estimator->state().ps[WINDOW_SIZE];
         Mat3d rotation = m_sw_estimator->state().rs[WINDOW_SIZE];
@@ -202,15 +207,75 @@ public:
         msg.twist.twist.linear.z = m_sw_estimator->state().vs[WINDOW_SIZE].z();
         m_odom_pub.publish(msg);
     }
+
+    void publishKeyFrameOdom()
+    {
+        if (m_keyframe_odom_pub.getNumSubscribers() < 1)
+            return;
+        if (m_sw_estimator->solve_flag == SolveFlag::INITIAL || m_sw_estimator->marginalization_flag == MarginFlag::MARGIN_SECOND_NEW)
+            return;
+        int i = WINDOW_SIZE - 2;
+        Vec3d position = m_sw_estimator->state().ps[i];
+        Mat3d rotation = m_sw_estimator->state().rs[i];
+        Quatd quat(rotation);
+        nav_msgs::Odometry odometry;
+        odometry.header.frame_id = m_node_config.map_frame;
+        odometry.header.stamp = ros::Time().fromSec(m_sw_estimator->state().timestamps[i]);
+        odometry.child_frame_id = m_node_config.body_frame;
+        odometry.pose.pose.position.x = position.x();
+        odometry.pose.pose.position.y = position.y();
+        odometry.pose.pose.position.z = position.z();
+        odometry.pose.pose.orientation.x = quat.x();
+        odometry.pose.pose.orientation.y = quat.y();
+        odometry.pose.pose.orientation.z = quat.z();
+        odometry.pose.pose.orientation.w = quat.w();
+        m_keyframe_odom_pub.publish(odometry);
+    }
+    void publishKeyFramePoints()
+    {
+        if (m_keyframe_point_pub.getNumSubscribers() < 1)
+            return;
+        if (m_sw_estimator->solve_flag == SolveFlag::INITIAL || m_sw_estimator->marginalization_flag == MarginFlag::MARGIN_SECOND_NEW)
+            return;
+        int i = WINDOW_SIZE - 2;
+        sensor_msgs::PointCloud point_cloud;
+
+        point_cloud.header.stamp = ros::Time().fromSec(m_sw_estimator->state().timestamps[i]);
+        for (auto &it_per_id : m_sw_estimator->feature_manager.features)
+        {
+            int frame_size = it_per_id.observations.size();
+            if (it_per_id.start_frame < WINDOW_SIZE - 2 && it_per_id.start_frame + frame_size - 1 >= WINDOW_SIZE - 2 && it_per_id.solve_flag == 1)
+            {
+                int imu_i = it_per_id.start_frame;
+                Vec3d pts_i = it_per_id.observations[0].point * it_per_id.estimated_depth;
+                Vec3d w_pts_i = m_sw_estimator->state().rs[imu_i] * (m_sw_estimator->state().ric * pts_i + m_sw_estimator->state().tic) + m_sw_estimator->state().ps[imu_i];
+                geometry_msgs::Point32 p;
+                p.x = w_pts_i(0);
+                p.y = w_pts_i(1);
+                p.z = w_pts_i(2);
+                point_cloud.points.push_back(p);
+                int imu_j = WINDOW_SIZE - 2 - it_per_id.start_frame;
+                sensor_msgs::ChannelFloat32 p_2d;
+                p_2d.values.push_back(it_per_id.observations[imu_j].point.x());
+                p_2d.values.push_back(it_per_id.observations[imu_j].point.y());
+                p_2d.values.push_back(it_per_id.observations[imu_j].uv.x());
+                p_2d.values.push_back(it_per_id.observations[imu_j].uv.y());
+                p_2d.values.push_back(it_per_id.feature_id);
+                point_cloud.channels.push_back(p_2d);
+            }
+        }
+        point_cloud.header.frame_id = m_node_config.map_frame;
+        m_keyframe_point_pub.publish(point_cloud);
+    }
     void mainCallback(const ros::TimerEvent &event)
     {
         if (!syncPackage())
             return;
         processImus();
         processFeatures();
-        if (m_sw_estimator->solve_flag == SolveFlag::INITIAL)
-            return;
         publishOdom();
+        publishKeyFrameOdom();
+        publishKeyFramePoints();
     }
 
 private:
@@ -221,6 +286,8 @@ private:
     ros::Subscriber m_feature_sub;
     ros::Subscriber m_imu_sub;
     ros::Publisher m_odom_pub;
+    ros::Publisher m_keyframe_odom_pub;
+    ros::Publisher m_keyframe_point_pub;
     ros::Timer m_timer;
     EstimatorConfig m_estimator_config;
     std::shared_ptr<SlidingWindowEstimator> m_sw_estimator;
