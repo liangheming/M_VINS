@@ -75,9 +75,12 @@ void PoseGraph4DOF::addKeyFrame(std::shared_ptr<KeyFrame> cur_kf, bool flag_dete
             m_loop_buf_mutex.unlock();
         }
     }
-    m_key_frames_mutex.lock();
+    
+    drift_mutex.lock();
     cur_kf->global_rotation = drift_rotation * cur_kf->local_rotation;
     cur_kf->global_translation = drift_rotation * cur_kf->local_translation + drift_translation;
+    drift_mutex.unlock();
+    m_key_frames_mutex.lock();
     key_frames.push_back(cur_kf);
     m_key_frames_mutex.unlock();
 }
@@ -190,9 +193,11 @@ bool PoseGraph4DOF::optimize4DoF()
         i++;
     }
 
+    drift_mutex.lock();
     double yaw_drift = rot2ypr(cur_kf->global_rotation).x() - rot2ypr(cur_kf->local_rotation).x();
     drift_rotation = ypr2rot(Vec3d(yaw_drift, 0, 0));
     drift_translation = cur_kf->global_translation - drift_rotation * cur_kf->local_translation;
+    drift_mutex.unlock();
     it++;
     for (; it != key_frames.end(); it++)
     {

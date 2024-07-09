@@ -16,6 +16,9 @@ struct NodeConfig
     std::string key_point_topic = "/vins_estimator/keyframe_points";
     std::string patern_file = "/home/zhouzhou/vs_projects/ws_vins/src/pose_graph/config/brief_pattern.yml";
     std::string vocabulary_file = "/home/zhouzhou/vs_projects/ws_vins/src/pose_graph/config/brief_k10L6.bin";
+
+    std::string map_frame = "world";
+    std::string body_frame = "body";
     int skip_first = 10;
     int skip = 0;
     double skip_dis = 0.0;
@@ -67,6 +70,7 @@ public:
     }
     void initPublishers()
     {
+        m_key_odom_pub = m_nh.advertise<nav_msgs::Odometry>("pose_graph_odom", 100);
     }
 
     void imgCallback(const sensor_msgs::ImageConstPtr &msg)
@@ -112,6 +116,24 @@ public:
         m_state.buf_mutex.unlock();
     }
 
+    void publishOdom(const Mat3d &rotation, const Vec3d &translation, const double &timestamp)
+    {
+        if (m_key_odom_pub.getNumSubscribers() < 1)
+            return;
+        nav_msgs::Odometry msg;
+        msg.header.stamp = ros::Time().fromSec(timestamp);
+        msg.header.frame_id = m_config.map_frame;
+        msg.child_frame_id = m_config.body_frame;
+        msg.pose.pose.position.x = translation(0);
+        msg.pose.pose.position.y = translation(1);
+        msg.pose.pose.position.z = translation(2);
+        Quatd quat(rotation);
+        msg.pose.pose.orientation.x = quat.x();
+        msg.pose.pose.orientation.y = quat.y();
+        msg.pose.pose.orientation.z = quat.z();
+        msg.pose.pose.orientation.w = quat.w();
+        m_key_odom_pub.publish(msg);
+    }
     void detectorTimerCallback(const ros::TimerEvent &event)
     {
         sensor_msgs::ImageConstPtr image_msg = NULL;
@@ -204,21 +226,17 @@ public:
         std::shared_ptr<KeyFrame> keyframe = std::make_shared<KeyFrame>(pose_msg->header.stamp.toSec(), vio_r, vio_t, point_id, point_3d, point_2d_uv, point_2d_normal, image);
 
         m_pose_graph->addKeyFrame(keyframe, true);
+
+        m_pose_graph->drift_mutex.lock();
+        Mat3d pose_r = m_pose_graph->drift_rotation * vio_r;
+        Vec3d pose_t = m_pose_graph->drift_translation + m_pose_graph->drift_rotation * vio_t;
+        m_pose_graph->drift_mutex.unlock();
+        publishOdom(pose_r, pose_t, pose_msg->header.stamp.toSec());
         m_state.last_t = vio_t;
-
-        ROS_INFO("add keyframe %lu", m_pose_graph->key_frames.size());
-
-        if (m_pose_graph->key_frames.back()->has_loop)
-        {
-            ROS_WARN("loop detected loop index: %d cur index: %d !", m_pose_graph->key_frames.back()->loop_index, m_pose_graph->key_frames.back()->index);
-        }
     }
     void optimizerTimerCallback(const ros::TimerEvent &event)
     {
-        if (m_pose_graph->optimize4DoF())
-        {
-            ROS_WARN("optimize4DoF");
-        }
+        m_pose_graph->optimize4DoF();
     }
 
 private:
@@ -231,6 +249,8 @@ private:
     ros::Subscriber m_img_sub;
     ros::Subscriber m_key_odom_sub;
     ros::Subscriber m_key_point_sub;
+
+    ros::Publisher m_key_odom_pub;
 
     ros::Timer m_detector_timer;
     ros::Timer m_optimizer_timer;

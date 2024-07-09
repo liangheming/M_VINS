@@ -195,8 +195,10 @@ public:
     std::queue<int> optimize_buf;
     BriefDatabase db;
     std::shared_ptr<BriefVocabulary> voc;
+    std::mutex drift_mutex;
 
 private:
     std::mutex m_loop_buf_mutex;
     std::mutex m_key_frames_mutex;
+    
 };
