@@ -51,7 +51,7 @@ bool ProjectionFactor::Evaluate(double const *const *parameters, double *residua
             Eigen::Map<Eigen::Matrix<double, 2, 7, Eigen::RowMajor>> jacobian_pose_i(jacobians[0]);
             jacobian_pose_i.setZero();
             jacobian_pose_i.block<2, 3>(0, 0) = reduce * ric.transpose() * rj.transpose();
-            jacobian_pose_i.block<2, 3>(0, 3) = -reduce * ric.transpose() * rj.transpose() * ri * Sophus::SO3d::hat(pts_imu_i);
+            jacobian_pose_i.block<2, 3>(0, 3) = -reduce * ric.transpose() * rj.transpose() * ri * skewSymmetric(pts_imu_i);
         }
 
         if (jacobians[1])
@@ -59,7 +59,7 @@ bool ProjectionFactor::Evaluate(double const *const *parameters, double *residua
             Eigen::Map<Eigen::Matrix<double, 2, 7, Eigen::RowMajor>> jacobian_pose_j(jacobians[1]);
             jacobian_pose_j.setZero();
             jacobian_pose_j.block<2, 3>(0, 0) = -reduce * ric.transpose() * rj.transpose();
-            jacobian_pose_j.block<2, 3>(0, 3) = reduce * ric.transpose() * Sophus::SO3d::hat(pts_imu_j);
+            jacobian_pose_j.block<2, 3>(0, 3) = reduce * ric.transpose() * skewSymmetric(pts_imu_j);
         }
         Mat3d temp_r = ric.transpose() * rj.transpose() * ri * ric;
         if (jacobians[2])
@@ -67,7 +67,7 @@ bool ProjectionFactor::Evaluate(double const *const *parameters, double *residua
             Eigen::Map<Eigen::Matrix<double, 2, 7, Eigen::RowMajor>> jacobian_ex_pose(jacobians[2]);
             jacobian_ex_pose.setZero();
             jacobian_ex_pose.block<2, 3>(0, 0) = reduce * ric.transpose() * (rj.transpose() * ri - Mat3d::Identity());
-            jacobian_ex_pose.block<2, 3>(0, 3) = reduce * (Sophus::SO3d::hat(temp_r * pts_camera_i) - temp_r * Sophus::SO3d::hat(pts_camera_i) + Sophus::SO3d::hat(ric.transpose() * (rj.transpose() * (ri * tic + pi - pj) - tic)));
+            jacobian_ex_pose.block<2, 3>(0, 3) = reduce * (skewSymmetric(temp_r * pts_camera_i) - temp_r * skewSymmetric(pts_camera_i) + skewSymmetric(ric.transpose() * (rj.transpose() * (ri * tic + pi - pj) - tic)));
         }
         if (jacobians[3])
         {

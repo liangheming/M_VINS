@@ -4,7 +4,7 @@ Integration::Integration(const Eigen::Vector3d &_acc_0, const Eigen::Vector3d &_
                          const Eigen::Vector3d &_linearized_ba, const Eigen::Vector3d &_linearized_bg)
     : acc_0(_acc_0), gyr_0(_gyr_0), linearized_ba(_linearized_ba), linearized_bg(_linearized_bg), linearized_acc(_acc_0), linearized_gyr(_gyr_0),
       jacobian(Mat15d::Identity()), covariance(Mat15d::Zero()),
-      sum_dt(0.0), delta_p(Vec3d::Zero()), delta_q(Mat3d::Identity()), delta_v(Vec3d::Zero())
+      sum_dt(0.0), delta_p(Vec3d::Zero()), delta_q(Quatd::Identity()), delta_v(Vec3d::Zero())
 
 {
     noise = Mat18d::Zero();
@@ -48,38 +48,38 @@ void Integration::propagate(double _dt, const Vec3d &_acc_1, const Vec3d &_gyr_1
 void Integration::midPointIntegration()
 {
     Vec3d un_acc_0 = delta_q * (acc_0 - linearized_ba);
-    Vec3d un_gyr = 0.5 * (gyr_0 + gyr_0) - linearized_bg;
-    Mat3d new_delta_q = delta_q * Sophus::SO3d::exp(un_gyr * dt).matrix();
+    Vec3d un_gyr = 0.5 * (gyr_0 + gyr_1) - linearized_bg;
+    Quatd new_delta_q = delta_q * deltaQ(un_gyr * dt);
     Vec3d un_acc_1 = new_delta_q * (acc_1 - linearized_ba);
     Vec3d un_acc = 0.5 * (un_acc_0 + un_acc_1);
     Vec3d new_delta_p = delta_p + delta_v * dt + 0.5 * un_acc * dt * dt;
     Vec3d new_delta_v = delta_v + un_acc * dt;
 
     Mat15d F = Mat15d::Identity();
-    Mat3d r_a_0_x = delta_q * Sophus::SO3d::hat(acc_0 - linearized_ba);
-    Mat3d r_a_1_x = new_delta_q * Sophus::SO3d::hat(acc_1 - linearized_ba);
+    Mat3d r_a_0_x = delta_q.toRotationMatrix() * skewSymmetric(acc_0 - linearized_ba);
+    Mat3d r_a_1_x = new_delta_q.toRotationMatrix() * skewSymmetric(acc_1 - linearized_ba);
 
     double dt_2 = dt * dt, dt_3 = dt * dt * dt;
-    F.block<3, 3>(0, 3) = -0.25 * dt_2 * (r_a_1_x * Sophus::SO3d::exp(-un_gyr * dt).matrix() + r_a_0_x);
+    F.block<3, 3>(0, 3) = -0.25 * dt_2 * (r_a_1_x * (Mat3d::Identity() - skewSymmetric(un_gyr * dt)) + r_a_0_x);
     F.block<3, 3>(0, 6) = Mat3d::Identity() * dt;
-    F.block<3, 3>(0, 9) = -0.25 * dt_2 * (delta_q + new_delta_q);
-    F.block<3, 3>(0, 12) = 0.25 * dt_3 * (r_a_1_x * Jr(un_gyr * dt));
-    F.block<3, 3>(3, 3) = Sophus::SO3d::exp(-un_gyr * dt).matrix();
-    F.block<3, 3>(3, 12) = -dt * Jr(un_gyr * dt);
-    F.block<3, 3>(6, 3) = -0.5 * dt * (r_a_1_x * Sophus::SO3d::exp(-un_gyr * dt).matrix() + r_a_0_x);
-    F.block<3, 3>(6, 9) = -0.5 * dt * (delta_q + new_delta_q);
-    F.block<3, 3>(6, 12) = 0.5 * dt_2 * (r_a_1_x * Jr(un_gyr * dt));
+    F.block<3, 3>(0, 9) = -0.25 * dt_2 * (delta_q.toRotationMatrix() + new_delta_q.toRotationMatrix());
+    F.block<3, 3>(0, 12) = 0.25 * dt_3 * r_a_1_x;
+    F.block<3, 3>(3, 3) = Mat3d::Identity() - skewSymmetric(un_gyr * dt);
+    F.block<3, 3>(3, 12) = -dt * Mat3d::Identity();
+    F.block<3, 3>(6, 3) = -0.5 * dt * (r_a_1_x * (Mat3d::Identity() - skewSymmetric(un_gyr * dt)) + r_a_0_x);
+    F.block<3, 3>(6, 9) = -0.5 * dt * (delta_q.toRotationMatrix() + new_delta_q.toRotationMatrix());
+    F.block<3, 3>(6, 12) = 0.5 * dt_2 * r_a_1_x;
 
     Mat15x18d V = Mat15x18d::Zero();
-    V.block<3, 3>(0, 0) = -0.25 * dt_2 * delta_q;
-    V.block<3, 3>(0, 3) = 0.125 * dt_3 * (r_a_1_x * Jr(un_gyr * dt));
-    V.block<3, 3>(0, 6) = -0.25 * dt_2 * new_delta_q;
+    V.block<3, 3>(0, 0) = 0.25 * dt_2 * delta_q.toRotationMatrix();
+    V.block<3, 3>(0, 3) = -0.125 * dt_3 * r_a_1_x;
+    V.block<3, 3>(0, 6) = 0.25 * dt_2 * new_delta_q.toRotationMatrix();
     V.block<3, 3>(0, 9) = V.block<3, 3>(0, 3);
-    V.block<3, 3>(3, 3) = -0.5 * dt * Jr(un_gyr * dt);
+    V.block<3, 3>(3, 3) = 0.5 * dt * Mat3d::Identity();
     V.block<3, 3>(3, 9) = V.block<3, 3>(3, 3);
-    V.block<3, 3>(6, 0) = -0.5 * dt * delta_q;
-    V.block<3, 3>(6, 3) = 0.25 * dt_2 * (r_a_1_x * Jr(un_gyr * dt));
-    V.block<3, 3>(6, 6) = -0.5 * dt * new_delta_q;
+    V.block<3, 3>(6, 0) = 0.5 * dt * delta_q.toRotationMatrix();
+    V.block<3, 3>(6, 3) = -0.25 * dt_2 * r_a_1_x;
+    V.block<3, 3>(6, 6) = 0.5 * dt * new_delta_q.toRotationMatrix();
     V.block<3, 3>(6, 9) = V.block<3, 3>(6, 3);
     V.block<3, 3>(9, 12) = Mat3d::Identity() * dt;
     V.block<3, 3>(12, 15) = Mat3d::Identity() * dt;
@@ -107,8 +107,8 @@ void Integration::repropagate(const Vec3d &_linearized_ba, const Vec3d &_lineari
         propagate(dt_buf[i], acc_buf[i], gyr_buf[i]);
 }
 
-Eigen::Matrix<double, 15, 1> Integration::evaluate(const Vec3d &pi, const Mat3d &ri, const Vec3d &vi, const Vec3d &bai, const Vec3d &bgi,
-                                                   const Vec3d &pj, const Mat3d &rj, const Vec3d &vj, const Vec3d &baj, const Vec3d &bgj, const Vec3d &g_vec)
+Eigen::Matrix<double, 15, 1> Integration::evaluate(const Vec3d &pi, const Quatd &qi, const Vec3d &vi, const Vec3d &bai, const Vec3d &bgi,
+                                                   const Vec3d &pj, const Quatd &qj, const Vec3d &vj, const Vec3d &baj, const Vec3d &bgj, const Vec3d &g_vec)
 {
     Eigen::Matrix<double, 15, 1> residuals;
     Mat3d dp_dba = jacobian.block<3, 3>(O_P, O_BA);
@@ -120,14 +120,14 @@ Eigen::Matrix<double, 15, 1> Integration::evaluate(const Vec3d &pi, const Mat3d 
 
     Vec3d dba = bai - linearized_ba;
     Vec3d dbg = bgi - linearized_bg;
-    
-    Mat3d corrected_delta_q = delta_q * Sophus::SO3d::exp(dq_dbg * dbg).matrix();
+
+    Quatd corrected_delta_q = delta_q * deltaQ(dq_dbg * dbg);
     Vec3d corrected_delta_v = delta_v + dv_dba * dba + dv_dbg * dbg;
     Vec3d corrected_delta_p = delta_p + dp_dba * dba + dp_dbg * dbg;
 
-    residuals.block<3, 1>(O_P, 0) = ri.transpose() * (0.5 * -g_vec * sum_dt * sum_dt + pj - pi - vi * sum_dt) - corrected_delta_p;
-    residuals.block<3, 1>(O_R, 0) = Sophus::SO3d(corrected_delta_q.transpose() * ri.transpose() * rj).log();
-    residuals.block<3, 1>(O_V, 0) = ri.transpose() * (-g_vec * sum_dt + vj - vi) - corrected_delta_v;
+    residuals.block<3, 1>(O_P, 0) = qi.inverse() * (0.5 * g_vec * sum_dt * sum_dt + pj - pi - vi * sum_dt) - corrected_delta_p;
+    residuals.block<3, 1>(O_R, 0) = 2.0 * (corrected_delta_q.inverse() * (qi.inverse() * qj)).vec();
+    residuals.block<3, 1>(O_V, 0) = qi.inverse() * (g_vec * sum_dt + vj - vi) - corrected_delta_v;
     residuals.block<3, 1>(O_BA, 0) = baj - bai;
     residuals.block<3, 1>(O_BG, 0) = bgj - bgi;
 

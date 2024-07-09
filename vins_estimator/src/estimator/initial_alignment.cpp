@@ -4,9 +4,9 @@ Eigen::MatrixXd TangentBasis(Vec3d &g0)
 {
     Vec3d b, c;
     Vec3d a = g0.normalized();
-    Vec3d tmp(0, 0, -1.0);
+    Vec3d tmp(0, 0, 1.0);
     if (a == tmp)
-        tmp << -1.0, 0, 0;
+        tmp << 1.0, 0, 0;
     b = (tmp - a * (a.transpose() * tmp)).normalized();
     c = a.cross(b);
     Eigen::MatrixXd bc(3, 2);
@@ -31,9 +31,9 @@ void solveGyroscopeBias(std::map<double, ImageFrame> &all_image_frame, Vec3d *bg
         tmp_A.setZero();
         Eigen::VectorXd tmp_b(3);
         tmp_b.setZero();
-        Mat3d r_ij = frame_i->second.r.transpose() * frame_j->second.r;
+        Quatd q_ij(frame_i->second.r.transpose() * frame_j->second.r);
         tmp_A = frame_j->second.integration->jacobian.template block<3, 3>(O_R, O_BG);
-        tmp_b = Sophus::SO3d(frame_j->second.integration->delta_q.transpose() * r_ij).log();
+        tmp_b = 2.0 * (frame_j->second.integration->delta_q.inverse() * q_ij).vec();
         A += tmp_A.transpose() * tmp_A;
         b += tmp_A.transpose() * tmp_b;
     }
@@ -76,12 +76,12 @@ bool LinearAlignment(std::map<double, ImageFrame> &all_image_frame, Vec3d &gravi
         double dt = frame_j->second.integration->sum_dt;
 
         tmp_A.block<3, 3>(0, 0) = -dt * Mat3d::Identity();
-        tmp_A.block<3, 3>(0, 6) = -frame_i->second.r.transpose() * dt * dt / 2 * Mat3d::Identity();
+        tmp_A.block<3, 3>(0, 6) = frame_i->second.r.transpose() * dt * dt / 2 * Mat3d::Identity();
         tmp_A.block<3, 1>(0, 9) = frame_i->second.r.transpose() * (frame_j->second.t - frame_i->second.t) / 100.0;
         tmp_b.block<3, 1>(0, 0) = frame_j->second.integration->delta_p + frame_i->second.r.transpose() * frame_j->second.r * tic - tic;
         tmp_A.block<3, 3>(3, 0) = -Mat3d::Identity();
         tmp_A.block<3, 3>(3, 3) = frame_i->second.r.transpose() * frame_j->second.r;
-        tmp_A.block<3, 3>(3, 6) = -frame_i->second.r.transpose() * dt * Mat3d::Identity();
+        tmp_A.block<3, 3>(3, 6) = frame_i->second.r.transpose() * dt * Mat3d::Identity();
         tmp_b.block<3, 1>(3, 0) = frame_j->second.integration->delta_v;
 
         Eigen::MatrixXd r_A = tmp_A.transpose() * tmp_A;
@@ -143,13 +143,13 @@ void RefineGravity(std::map<double, ImageFrame> &all_image_frame, Vec3d &gravity
             double dt = frame_j->second.integration->sum_dt;
 
             tmp_A.block<3, 3>(0, 0) = -dt * Mat3d::Identity();
-            tmp_A.block<3, 2>(0, 6) = -frame_i->second.r.transpose() * dt * dt / 2 * Mat3d::Identity() * lxly;
+            tmp_A.block<3, 2>(0, 6) = frame_i->second.r.transpose() * dt * dt / 2 * Mat3d::Identity() * lxly;
             tmp_A.block<3, 1>(0, 8) = frame_i->second.r.transpose() * (frame_j->second.t - frame_i->second.t) / 100.0;
             tmp_b.block<3, 1>(0, 0) = frame_j->second.integration->delta_p + frame_i->second.r.transpose() * frame_j->second.r * tic - tic + frame_i->second.r.transpose() * dt * dt / 2 * g0;
 
             tmp_A.block<3, 3>(3, 0) = -Mat3d::Identity();
             tmp_A.block<3, 3>(3, 3) = frame_i->second.r.transpose() * frame_j->second.r;
-            tmp_A.block<3, 2>(3, 6) = -frame_i->second.r.transpose() * dt * Mat3d::Identity() * lxly;
+            tmp_A.block<3, 2>(3, 6) = frame_i->second.r.transpose() * dt * Mat3d::Identity() * lxly;
             tmp_b.block<3, 1>(3, 0) = frame_j->second.integration->delta_v + frame_i->second.r.transpose() * dt * Mat3d::Identity() * g0;
 
             Eigen::MatrixXd r_A = tmp_A.transpose() * tmp_A;

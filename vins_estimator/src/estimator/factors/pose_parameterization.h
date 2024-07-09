@@ -1,7 +1,6 @@
 #pragma once
 #include "../commons.h"
 #include <ceres/ceres.h>
-#include <sophus/so3.hpp>
 
 class PoseParameterization : public ceres::LocalParameterization
 {

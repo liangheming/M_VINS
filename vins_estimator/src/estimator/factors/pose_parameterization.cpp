@@ -8,13 +8,13 @@ bool PoseParameterization::Plus(const double *x, const double *delta, double *x_
 
     Eigen::Map<const Vec3d> dp(delta);
 
-    Eigen::Map<const Vec3d> dq(delta + 3);
+    Quatd dq = deltaQ(Eigen::Map<const Eigen::Vector3d>(delta + 3));
 
     Eigen::Map<Vec3d> p(x_plus_delta);
     Eigen::Map<Quatd> q(x_plus_delta + 3);
 
     p = _p + dp;
-    q = Quatd(_q.toRotationMatrix() * Sophus::SO3d::exp(dq).matrix()).normalized();
+    q = (_q * dq).normalized();
     return true;
 }
 

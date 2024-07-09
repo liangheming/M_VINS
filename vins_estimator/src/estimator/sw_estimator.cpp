@@ -37,7 +37,7 @@ void SlidingWindowEstimator::reset()
 
     m_state.ric = m_config.ric;
     m_state.tic = m_config.tic;
-    m_state.gravity = Vec3d(0.0, 0.0, -m_config.g_norm);
+    m_state.gravity = Vec3d(0.0, 0.0, m_config.g_norm);
 
     m_state.last_marginalization_info = nullptr;
     m_state.last_marginalization_parameter_blocks.clear();
@@ -75,10 +75,10 @@ void SlidingWindowEstimator::processImu(const double &dt, const Vec3d &acc, cons
         m_state.linear_acceleration_buf[j].push_back(acc);
         m_state.angular_velocity_buf[j].push_back(gyro);
 
-        Vec3d un_acc_0 = m_state.rs[j] * (m_state.acc_0 - m_state.bas[j]) + m_state.gravity;
+        Vec3d un_acc_0 = m_state.rs[j] * (m_state.acc_0 - m_state.bas[j]) - m_state.gravity;
         Vec3d un_gyr = 0.5 * (m_state.gyro_0 + gyro) - m_state.bgs[j];
-        m_state.rs[j] *= Sophus::SO3d::exp(un_gyr * dt).matrix();
-        Vec3d un_acc_1 = m_state.rs[j] * (acc - m_state.bas[j]) + m_state.gravity;
+        m_state.rs[j] *= deltaQ(un_gyr * dt).toRotationMatrix();
+        Vec3d un_acc_1 = m_state.rs[j] * (acc - m_state.bas[j]) - m_state.gravity;
         Vec3d un_acc = 0.5 * (un_acc_0 + un_acc_1);
         m_state.ps[j] += dt * m_state.vs[j] + 0.5 * dt * dt * un_acc;
         m_state.vs[j] += dt * un_acc;
@@ -452,11 +452,6 @@ void SlidingWindowEstimator::afterVisualInitialAlign(Eigen::VectorXd &xs)
             continue;
         it_per_id.estimated_depth *= s;
     }
-
-    // Mat3d r0 = Quatd::FromTwoVectors(m_state.gravity.normalized(), Vec3d(0, 0, -1.0)).toRotationMatrix();
-    // double yaw = rot2ypr(r0 * m_state.rs[0]).x();
-    // r0 = ypr2rot(Eigen::Vector3d{-yaw, 0, 0}) * r0;
-    // m_state.gravity = Vec3d(0, 0, -1.0) * m_state.gravity.norm();
 
     Mat3d r0 = rotFromG(m_state.gravity);
     double yaw = rot2ypr(r0 * m_state.rs[0]).x();

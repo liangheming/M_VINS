@@ -1,13 +1,4 @@
 #include "commons.h"
-Mat3d Jr(const Vec3d &val)
-{
-    return Sophus::SO3d::leftJacobian(val).transpose();
-}
-
-Mat3d Jr_inv(const Vec3d &val)
-{
-    return Sophus::SO3d::leftJacobianInverse(val).transpose();
-}
 
 bool solveRelativeRT(const std::vector<std::pair<Vec3d, Vec3d>> &corres, Mat3d &rotation, Vec3d &translation, const double &ransac_threshold)
 {
@@ -87,7 +78,7 @@ Mat3d rotFromG(const Eigen::Vector3d &g)
 {
     Mat3d R0;
     Vec3d ng1 = g.normalized();
-    Vec3d ng2{0, 0, -1.0};
+    Vec3d ng2{0, 0, 1.0};
     R0 = Quatd::FromTwoVectors(ng1, ng2).toRotationMatrix();
     double yaw = rot2ypr(R0).x();
     R0 = ypr2rot(Vec3d{-yaw, 0, 0}) * R0;
