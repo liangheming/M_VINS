@@ -14,6 +14,8 @@ find_package(catkin REQUIRED COMPONENTS
   tf
 )
 
+add_compile_definitions(SOPHUS_USE_BASIC_LOGGING)
+
 find_package(Eigen3 REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(OpenCV REQUIRED)
