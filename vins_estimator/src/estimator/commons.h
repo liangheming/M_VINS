@@ -1,5 +1,6 @@
 #pragma once
 #include <map>
+#include <mutex>
 #include <memory>
 #include <Eigen/Eigen>
 #include <sophus/so3.hpp>
