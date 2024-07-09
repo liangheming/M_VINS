@@ -5,9 +5,6 @@ set(CMAKE_BUILD_TYPE "Release")
 set(CMAKE_CXX_FLAGS "-std=c++17")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g")
 
-add_compile_definitions(SOPHUS_USE_BASIC_LOGGING)
-
-
 find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   geometry_msgs
