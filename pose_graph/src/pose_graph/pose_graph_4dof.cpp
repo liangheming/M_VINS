@@ -212,6 +212,6 @@ bool PoseGraph4DOF::optimize4DoF()
 
 void PoseGraph4DOF::loadVocabulary(std::string &voc_path)
 {
-    voc = std::make_shared<BriefVocabulary>(voc_path);
+    voc = std::make_shared<BriefVocabulary>(voc_path.c_str());
     db.setVocabulary(*voc, false, 0);
 }
