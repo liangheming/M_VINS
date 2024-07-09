@@ -1,4 +1,6 @@
 #pragma once
+#include <mutex>
+#include <memory>
 #include <Eigen/Eigen>
 #include <opencv2/opencv.hpp>
 
