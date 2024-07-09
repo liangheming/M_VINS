@@ -1,4 +1,5 @@
 #pragma once
+#include <memory>
 #include <Eigen/Eigen>
 #include <opencv2/opencv.hpp>
 #include "camera_model/pinhole_camera.h"

@@ -9,6 +9,10 @@
 #include "feature_tracker.h"
 #include <yaml-cpp/yaml.h>
 
+#include <mutex>
+#include <memory>
+
+
 struct NodeParams
 {
     std::string img_topic;
