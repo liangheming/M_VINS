@@ -51,14 +51,14 @@ bool ProjectionFactor::Evaluate(double const *const *parameters, double *residua
             Eigen::Map<Eigen::Matrix<double, 2, 7, Eigen::RowMajor>> jacobian_pose_i(jacobians[0]);
             jacobian_pose_i.setZero();
             jacobian_pose_i.block<2, 3>(0, 0) = reduce * ric.transpose() * rj.transpose();
-            jacobian_pose_i.block<2, 3>(0, 3) = -reduce * ric.transpose() * rj.transpose() * ri * Sophus::SO3d::hat(pts_imu_i);
+            jacobian_pose_i.block<2, 3>(0, 3) = -1.0 * reduce * ric.transpose() * rj.transpose() * ri * Sophus::SO3d::hat(pts_imu_i);
         }
 
         if (jacobians[1])
         {
             Eigen::Map<Eigen::Matrix<double, 2, 7, Eigen::RowMajor>> jacobian_pose_j(jacobians[1]);
             jacobian_pose_j.setZero();
-            jacobian_pose_j.block<2, 3>(0, 0) = -reduce * ric.transpose() * rj.transpose();
+            jacobian_pose_j.block<2, 3>(0, 0) = -1.0 * reduce * ric.transpose() * rj.transpose();
             jacobian_pose_j.block<2, 3>(0, 3) = reduce * ric.transpose() * Sophus::SO3d::hat(pts_imu_j);
         }
         Mat3d temp_r = ric.transpose() * rj.transpose() * ri * ric;
@@ -72,7 +72,7 @@ bool ProjectionFactor::Evaluate(double const *const *parameters, double *residua
         if (jacobians[3])
         {
             Eigen::Map<Vec2d> jacobian_feature(jacobians[3]);
-            jacobian_feature = -reduce * temp_r * pts_i / (inv_dep_i * inv_dep_i);
+            jacobian_feature = -1.0 * reduce * temp_r * pts_i / (inv_dep_i * inv_dep_i);
         }
     }
     return true;

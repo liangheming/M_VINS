@@ -48,7 +48,7 @@ void Integration::propagate(double _dt, const Vec3d &_acc_1, const Vec3d &_gyr_1
 void Integration::midPointIntegration()
 {
     Vec3d un_acc_0 = delta_q * (acc_0 - linearized_ba);
-    Vec3d un_gyr = 0.5 * (gyr_0 + gyr_0) - linearized_bg;
+    Vec3d un_gyr = 0.5 * (gyr_0 + gyr_1) - linearized_bg;
     Mat3d new_delta_q = delta_q * Sophus::SO3d::exp(un_gyr * dt).matrix();
     Vec3d un_acc_1 = new_delta_q * (acc_1 - linearized_ba);
     Vec3d un_acc = 0.5 * (un_acc_0 + un_acc_1);
