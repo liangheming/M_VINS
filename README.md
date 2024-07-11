@@ -4,6 +4,7 @@
 1. 基于原有[VINS-Mono](https://github.com/HKUST-Aerial-Robotics/VINS-Mono)进行重构，以适配ROS2
 2. 目前只提供了前端光流和后端滑窗优化两个基本模块，后续会跟进位姿图模块
 3. 支持euroc数据包转ros2的bag
+4. 暂时支持euroc数据
 
 ## 环境依赖
 1. Ubuntu 22.04
@@ -59,6 +60,11 @@ git clone https://github.com/liangheming/M_VINS.git
 cd ..
 colcon build
 ```
+## 数据
+
+[euroc](https://projects.asl.ethz.ch/datasets/doku.php?id=kmavvisualinertialdatasets)
+
+**需要下载原始的数据文件夹，然后使用脚本进行转换成ros2的包**
 
 ## 部分脚本
 
@@ -80,6 +86,7 @@ ros2 launch odom_recorder odom_recorder_launch.py
 - 添加后端回环检测和位姿图优化
 - 添加ros相关消息和tf的发布
 - 添加部分路径以及特征点的显示
+- 支持其他相机的数据
 
 ## 特别感谢
 - [VINS-Mono](https://github.com/HKUST-Aerial-Robotics/VINS-Mono)
