@@ -82,6 +82,26 @@ ros2 launch vins_estimator vins_estimator_launch.py
 ros2 launch odom_recorder odom_recorder_launch.py
 ```
 
+## 里程计在euroc下的rmse指标
+| 数据集 | rmse |
+| --- | --- |
+| MH_01_easy | 0.185570 |
+| MH_02_easy | 0.160492 |
+| MH_03_medium | 0.233526 |
+| MH_04_difficult | 0.399066 |
+| MH_05_difficult | 0.329883 |
+| V1_01_easy | 0.092951 |
+| V1_02_medium | 0.091776 |
+| V1_03_difficult | 0.177207 |
+| V2_01_easy | 0.077961 |
+| V2_02_medium | 0.115854 |
+| V2_03_difficult | 0.244857 |
+
+### 部分指标说明
+1. 指标来源 evo_ape 参数配置 (-va -s)
+2. 原Repo的指标在不同系统上的差异较大，论文中的指标对应 Ubuntu 16.04
+3. 编译过Ubuntu 18.04 和 Ubuntu 20.04(需要改Opencv相关代码) ，Ubuntu 20.04 指标差很多
+
 ## TODO
 - 添加后端回环检测和位姿图优化
 - 添加ros相关消息和tf的发布
