@@ -140,18 +140,6 @@ void SlidingWindowEstimator::processFeature(const TrackedFeatures &feats, double
         m_state.last_p0 = m_state.ps[0];
     }
 
-    // if (solve_flag == NON_LINEAR)
-    // {
-    //     std::cout << "***********************" << temp_count++ << "***********************" << std::endl;
-    //     std::cout << "ps:" << m_state.ps[WINDOW_SIZE].transpose() << std::endl;
-    //     std::cout << "vs:" << m_state.vs[WINDOW_SIZE].transpose() << std::endl;
-    //     std::cout << "bas:" << m_state.bas[WINDOW_SIZE].transpose() << std::endl;
-    //     std::cout << "bgs:" << m_state.bgs[WINDOW_SIZE].transpose() << std::endl;
-    //     std::cout << "qs:" << Quatd(m_state.rs[WINDOW_SIZE]).coeffs().transpose() << std::endl;
-    //     Vec3d temp_p = m_state.ps[WINDOW_SIZE];
-    //     Quatd temp_q = Quatd(m_state.rs[WINDOW_SIZE]);
-    //     (*out_file) << std::fixed << std::setprecision(9) << timestamp << " " << temp_p.x() << " " << temp_p.y() << " " << temp_p.z() << " " << temp_q.x() << " " << temp_q.y() << " " << temp_q.z() << " " << temp_q.w() << std::endl;
-    // }
 }
 void SlidingWindowEstimator::slideWindowNew()
 {
@@ -256,6 +244,7 @@ void SlidingWindowEstimator::slideWindow()
 
 bool SlidingWindowEstimator::initialStructure()
 {
+
     std::vector<SFMFeature> sfm_f;
     for (auto &it_per_id : feature_manager.features)
     {
@@ -275,7 +264,6 @@ bool SlidingWindowEstimator::initialStructure()
     Mat3d relative_r;
     Vec3d relative_t;
     int l;
-
     if (!relativePose(relative_r, relative_t, l))
         return false;
     GlobalSFM sfm;
@@ -287,7 +275,6 @@ bool SlidingWindowEstimator::initialStructure()
         marginalization_flag = MARGIN_OLD;
         return false;
     }
-
     if (!beforeVisualInitialAlign(sfm_tracked_points, rs, ts))
         return false;
 
@@ -296,16 +283,6 @@ bool SlidingWindowEstimator::initialStructure()
         return false;
     afterVisualInitialAlign(xs);
 
-    // for (int i = 0; i <= m_state.frame_count; i++)
-    // {
-    //     std::cout << "=================" << i << "================" << std::endl;
-    //     std::cout << Eigen::Quaterniond(m_state.rs[i]).coeffs().transpose() << std::endl;
-    //     std::cout << "*****************" << std::endl;
-    //     std::cout << m_state.ps[i].transpose() << std::endl;
-    //     std::cout << m_state.vs[i].transpose() << std::endl;
-    //     std::cout << m_state.bgs[i].transpose() << std::endl;
-    // }
-    // exit(0);
     return true;
 }
 
@@ -422,8 +399,8 @@ void SlidingWindowEstimator::afterVisualInitialAlign(Eigen::VectorXd &xs)
         m_state.rs[i] = ri;
         all_image_frame[m_state.timestamps[i]].is_keyframe = true;
     }
-
     feature_manager.triangulate(m_state.rs, m_state.ps, m_state.ric, m_state.tic);
+
     double s = (xs.tail<1>())(0);
 
     for (int i = 0; i <= WINDOW_SIZE; i++)
@@ -452,11 +429,6 @@ void SlidingWindowEstimator::afterVisualInitialAlign(Eigen::VectorXd &xs)
             continue;
         it_per_id.estimated_depth *= s;
     }
-
-    // Mat3d r0 = Quatd::FromTwoVectors(m_state.gravity.normalized(), Vec3d(0, 0, -1.0)).toRotationMatrix();
-    // double yaw = rot2ypr(r0 * m_state.rs[0]).x();
-    // r0 = ypr2rot(Eigen::Vector3d{-yaw, 0, 0}) * r0;
-    // m_state.gravity = Vec3d(0, 0, -1.0) * m_state.gravity.norm();
 
     Mat3d r0 = rotFromG(m_state.gravity);
     double yaw = rot2ypr(r0 * m_state.rs[0]).x();

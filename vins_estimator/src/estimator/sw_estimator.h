@@ -22,11 +22,11 @@ enum SolveFlag
 };
 struct EstimatorConfig
 {
-    double g_norm = 9.81;
+    double g_norm = 9.81007;
     bool estimate_td = false;
     bool estimate_ext = false;
-    Mat3d ric;
-    Vec3d tic;
+    Mat3d ric = Mat3d::Identity();
+    Vec3d tic = Vec3d::Zero();
     double axis_min_parallax = 30.0 / 460.0;
     double ransac_threshold = 0.3 / 460.0;
     Mat2d proj_sqrt_info = Mat2d::Identity() * 460.0 / 1.5;
@@ -114,9 +114,6 @@ public:
     SolveFlag solve_flag;
     FeatureManager feature_manager;
     std::map<double, ImageFrame> all_image_frame;
-
-    // size_t temp_count = 0;
-    // std::shared_ptr<std::ofstream> out_file;
 
 private:
     EstimatorConfig m_config;

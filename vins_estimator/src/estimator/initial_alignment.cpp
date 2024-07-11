@@ -27,16 +27,17 @@ void solveGyroscopeBias(std::map<double, ImageFrame> &all_image_frame, Vec3d *bg
     for (frame_i = all_image_frame.begin(); next(frame_i) != all_image_frame.end(); frame_i++)
     {
         frame_j = next(frame_i);
-        Eigen::MatrixXd tmp_A(3, 3);
+        Mat3d tmp_A;
         tmp_A.setZero();
-        Eigen::VectorXd tmp_b(3);
+        Vec3d tmp_b;
         tmp_b.setZero();
         Mat3d r_ij = frame_i->second.r.transpose() * frame_j->second.r;
-        tmp_A = frame_j->second.integration->jacobian.template block<3, 3>(O_R, O_BG);
-        tmp_b = Sophus::SO3d(frame_j->second.integration->delta_q.transpose() * r_ij).log();
+        tmp_A = frame_j->second.integration->jacobian.template block<3, 3>(O_R, O_BG);        
+        tmp_b = Sophus::SO3d(Quatd(frame_j->second.integration->delta_q.transpose() * r_ij)).log();
         A += tmp_A.transpose() * tmp_A;
         b += tmp_A.transpose() * tmp_b;
     }
+
     delta_bg = A.ldlt().solve(b);
 
     for (int i = 0; i <= WINDOW_SIZE; i++)

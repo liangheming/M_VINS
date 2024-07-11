@@ -1,74 +1,67 @@
-#include <memory>
+#include <filesystem>
+
+#include <rclcpp/rclcpp.hpp>
+
+#include <nav_msgs/msg/odometry.hpp>
+
 #include <fstream>
-#include <ros/ros.h>
-#include <nav_msgs/Odometry.h>
-#include <geometry_msgs/PointStamped.h>
+
+double stamp2double(builtin_interfaces::msg::Time stamp)
+{
+    return static_cast<double>(stamp.sec) + static_cast<double>(stamp.nanosec) * 1e-9;
+}
 
 struct NodeConfig
 {
-    std::string euroc_pose_topic;
-    std::string save_text_path;
     std::string odom_topic;
+    std::string output_file;
 };
 
-class RecorderNode
+class OdomRecorderNode : public rclcpp::Node
 {
 public:
-    RecorderNode() : m_nh("~")
+    OdomRecorderNode() : Node("odom_recorder_node")
     {
-        loadConfig();
-        initSubsriber();
-    }
-    void loadConfig()
-    {
-        m_nh.param<std::string>("pose_topic", m_config.euroc_pose_topic, "/leica/position");
-        m_nh.param<std::string>("save_text_path", m_config.save_text_path, "/home/zhouzhou/temp/MH_01.txt");
-        m_nh.param<std::string>("odom_topic", m_config.odom_topic, "/leica/position");
-    }
-    void initSubsriber()
-    {
-        // m_euroc_pose_sub = m_nh.subscribe(m_config.euroc_pose_topic, 10, &RecorderNode::eurocPoseCB, this);
-        m_odom_sub = m_nh.subscribe(m_config.odom_topic, 10, &RecorderNode::odomCB, this);
-    }
-    void eurocPoseCB(const geometry_msgs::PointStampedPtr &msg)
-    {
-        // m_out_file = std::make_shared<std::ofstream>(m_config.save_text_path, std::ios::app);
-        // double time_stamp = msg->header.stamp.toSec();
-        // m_out_file->precision(9);
-        // *m_out_file << time_stamp << " ";
-        // m_out_file->precision(5);
-        // *m_out_file << msg->point.x << " " << msg->point.y << " " << msg->point.z << " ";
-        // m_out_file->precision(6);
-        // *m_out_file << 0 << " " << 0 << " " << 0 << " " << 1 << std::endl;
-        // m_out_file->close();
+        this->declare_parameter<std::string>("odom_topic", "/odom");
+        this->declare_parameter<std::string>("output_file", "/home/zhouzhou/odom.csv");
+        m_config.odom_topic = this->get_parameter("odom_topic").as_string();
+        m_config.output_file = this->get_parameter("output_file").as_string();
+
+        std::filesystem::path output_file_path(m_config.output_file);
+        if (!std::filesystem::exists(output_file_path.parent_path()))
+        {
+            RCLCPP_ERROR(this->get_logger(), "output file parent dir not exist: %s", m_config.output_file.c_str());
+            exit(1);
+        }
+        if (std::filesystem::exists(output_file_path))
+        {
+            RCLCPP_WARN(this->get_logger(), "output file already exist: %s, removed", m_config.output_file.c_str());
+            std::filesystem::remove(output_file_path);
+        }
+        m_odom_sub = this->create_subscription<nav_msgs::msg::Odometry>(m_config.odom_topic, 100, std::bind(&OdomRecorderNode::odomCallBack, this, std::placeholders::_1));
     }
 
-    void odomCB(const nav_msgs::OdometryPtr &msg)
+    void odomCallBack(const nav_msgs::msg::Odometry::SharedPtr msg)
     {
-        ROS_INFO("REC ODOM : %.4f %.4f %.4f ;", msg->pose.pose.position.x, msg->pose.pose.position.y, msg->pose.pose.position.z);
-        m_out_file = std::make_shared<std::ofstream>(m_config.save_text_path, std::ios::app);
-        double time_stamp = msg->header.stamp.toSec();
-        m_out_file->setf(std::ios::fixed, std::ios::floatfield);
-        *m_out_file << time_stamp << " ";
-        *m_out_file << msg->pose.pose.position.x << " " << msg->pose.pose.position.y << " " << msg->pose.pose.position.z << " ";
-        *m_out_file << msg->pose.pose.orientation.x << " " << msg->pose.pose.orientation.y << " " << msg->pose.pose.orientation.z << " " << msg->pose.pose.orientation.w << std::endl;
-        m_out_file->close();
+        RCLCPP_INFO(this->get_logger(), "odom received, x: %.6f y: %.6f z: %.6f ", msg->pose.pose.position.x, msg->pose.pose.position.y, msg->pose.pose.position.z);
+        std::ofstream file_out(m_config.output_file, std::ios::app);
+        double timestamp = stamp2double(msg->header.stamp);
+        file_out.setf(std::ios::fixed, std::ios::floatfield);
+        file_out << timestamp << " ";
+        file_out << msg->pose.pose.position.x << " " << msg->pose.pose.position.y << " " << msg->pose.pose.position.z << " ";
+        file_out << msg->pose.pose.orientation.x << " " << msg->pose.pose.orientation.y << " " << msg->pose.pose.orientation.z << " " << msg->pose.pose.orientation.w << std::endl;
+        file_out.close();
     }
 
 private:
     NodeConfig m_config;
-    ros::NodeHandle m_nh;
-    ros::Subscriber m_odom_sub;
-    // ros::Subscriber m_euroc_pose_sub;
-
-    std::shared_ptr<std::ofstream> m_out_file;
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr m_odom_sub;
 };
 
-int main(int argc, char *argv[])
+int main(int argc, char **argv)
 {
-    ros::init(argc, argv, "odom_recorder_node");
-    RecorderNode recorder_node;
-    ros::spin();
-    ros::shutdown();
+    rclcpp::init(argc, argv);
+    rclcpp::spin(std::make_shared<OdomRecorderNode>());
+    rclcpp::shutdown();
     return 0;
 }
