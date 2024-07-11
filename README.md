@@ -83,7 +83,7 @@ ros2 launch odom_recorder odom_recorder_launch.py
 ```
 
 ## 里程计在euroc下的rmse指标
-| 数据集 | rmse |
+| 数据集 | rmse (no loop) |
 | --- | --- |
 | MH_01_easy | 0.185570 |
 | MH_02_easy | 0.160492 |
