@@ -126,7 +126,7 @@ Eigen::Matrix<double, 15, 1> Integration::evaluate(const Vec3d &pi, const Mat3d 
     Vec3d corrected_delta_p = delta_p + dp_dba * dba + dp_dbg * dbg;
 
     residuals.block<3, 1>(O_P, 0) = ri.transpose() * (0.5 * -g_vec * sum_dt * sum_dt + pj - pi - vi * sum_dt) - corrected_delta_p;
-    residuals.block<3, 1>(O_R, 0) = Sophus::SO3d(corrected_delta_q.transpose() * ri.transpose() * rj).log();
+    residuals.block<3, 1>(O_R, 0) = Sophus::SO3d(Quatd(corrected_delta_q.transpose() * ri.transpose() * rj)).log();
     residuals.block<3, 1>(O_V, 0) = ri.transpose() * (-g_vec * sum_dt + vj - vi) - corrected_delta_v;
     residuals.block<3, 1>(O_BA, 0) = baj - bai;
     residuals.block<3, 1>(O_BG, 0) = bgj - bgi;
