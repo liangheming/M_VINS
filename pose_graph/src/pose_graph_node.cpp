@@ -1,5 +1,6 @@
 #include <mutex>
 #include <queue>
+#include <filesystem>
 #include <rclcpp/rclcpp.hpp>
 
 #include <sensor_msgs/msg/image.hpp>
@@ -8,13 +9,16 @@
 
 #include "pose_graph/pose_graph_4dof.h"
 
+#include <yaml-cpp/yaml.h>
+
 struct NodeConfig
 {
     std::string img_topic = "/cam0/image_raw";
     std::string key_odom_topic = "/vins_estimator/keyframe_odom";
     std::string key_point_topic = "/vins_estimator/keyframe_points";
-    std::string patern_file = "/home/zhouzhou/vs_projects/ws_vins/src/pose_graph/config/brief_pattern.yml";
-    std::string vocabulary_file = "/home/zhouzhou/vs_projects/ws_vins/src/pose_graph/config/brief_k10L6.bin";
+    std::string patern_file = "brief_pattern.yml";
+    std::string vocabulary_file = "brief_k10L6.bin";
+    std::string config_file = "nothing.yaml";
 
     std::string map_frame = "world";
     std::string body_frame = "body";
@@ -52,8 +56,25 @@ public:
         this->declare_parameter("key_odom_topic", "/vins_estimator/keyframe_odom");
         this->declare_parameter("key_point_topic", "/vins_estimator/keyframe_points");
         this->declare_parameter("config_path", "nothing.yaml");
-        
+
+        this->get_parameter("img_topic", m_node_config.img_topic);
+        this->get_parameter("key_odom_topic", m_node_config.key_odom_topic);
+        this->get_parameter("key_point_topic", m_node_config.key_point_topic);
+        this->get_parameter("config_path", m_node_config.config_file);
+
+        if (std::filesystem::exists(m_node_config.config_file))
+        {
+            RCLCPP_INFO(this->get_logger(), "[PoseGraph] Load From File: %s", m_node_config.config_file.c_str());
+            YAML::Node config = YAML::LoadFile(m_node_config.config_file);
+        }
     }
+
+private:
+    NodeConfig m_node_config;
+    NodeState m_node_state;
+    PinholeParams m_camera_params;
+    PoseGraphConfig m_pose_graph_config;
+    std::shared_ptr<PoseGraph4DOF> m_pose_graph;
 };
 
 int main(int argc, char **argv)

@@ -1,0 +1,32 @@
+camera:
+  width: 752
+  height: 480
+  fx: 4.616e+02
+  fy: 4.603e+02
+  cx: 3.630e+02
+  cy: 2.481e+02
+  k1: -2.917e-01
+  k2: 8.228e-02
+  p1: 5.333e-05
+  p2: -1.578e-04
+tracker:
+  equalize: true
+  focal_length: 460
+  f_threshold: 1.0
+  min_dist: 30
+  max_count: 150
+  window_size: 20
+estimator:
+  axis_min_parallax: 30.0
+  estimate_ext: false
+  estimate_td: false
+  g_norm: 9.81007
+  observe_cov: 1.5
+  ransac_threshold: 0.3
+  ric: [0.0148655429818, -0.999880929698, 0.00414029679422, 0.999557249008, 0.0149672133247, 0.025715529948, -0.0257744366974, 0.00375618835797, 0.999660727178]
+  tic: [-0.0216401454975, -0.064676986768, 0.00981073058949]
+pose_graph:
+  patern_file: aaaa.png
+  vocabulary_file: aaaa.bin
+  
+  
